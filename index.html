@@ -1,4 +1,4 @@
-A<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -919,21 +919,40 @@ A<!DOCTYPE html>
         async function fetchGas() {
             const card = document.getElementById('gasCard');
             try {
-                const r = await fetch('https://cloudflare-eth.com', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({jsonrpc:"2.0",method:"eth_gasPrice",params:[],id:1})
-                });
-                const d = await r.json();
-                const gasGwei = parseInt(d.result, 16) / 1000000000;
-                const rounded = Math.round(gasGwei);
+                // Try Etherscan API first (no API key needed for gas price)
+                let r = await fetch('https://api.etherscan.io/api?module=gastracker&action=gasoracle');
+                let d = await r.json();
                 
-                document.getElementById('gasValue').innerText = rounded;
+                let gasGwei;
+                if(d.status === "1" && d.result) {
+                    // Etherscan returns gas in Gwei directly
+                    gasGwei = parseInt(d.result.ProposeGasPrice);
+                } else {
+                    // Fallback to Cloudflare RPC
+                    r = await fetch('https://cloudflare-eth.com', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({jsonrpc:"2.0",method:"eth_gasPrice",params:[],id:1})
+                    });
+                    d = await r.json();
+                    
+                    if(d.result) {
+                        gasGwei = Math.round(parseInt(d.result, 16) / 1000000000);
+                    } else {
+                        throw new Error('Invalid response from RPC');
+                    }
+                }
+                
+                if(isNaN(gasGwei) || gasGwei <= 0) {
+                    throw new Error('Invalid gas price value');
+                }
+                
+                document.getElementById('gasValue').innerText = gasGwei;
                 
                 // Color code by gas price
-                if(rounded < 30) {
+                if(gasGwei < 30) {
                     document.getElementById('gasValue').style.color = '#10b981'; // Low
-                } else if(rounded < 100) {
+                } else if(gasGwei < 100) {
                     document.getElementById('gasValue').style.color = '#f59e0b'; // Medium
                 } else {
                     document.getElementById('gasValue').style.color = '#ef4444'; // High
@@ -942,6 +961,7 @@ A<!DOCTYPE html>
                 card.classList.remove('error');
             } catch(e) {
                 document.getElementById('gasValue').innerText = '--';
+                document.getElementById('gasValue').style.color = '#ef4444';
                 card.classList.add('error');
                 console.error('Gas fetch failed:', e);
             }
