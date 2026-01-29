@@ -233,6 +233,19 @@ const EtherDash = (function () {
                     </div>
                 </div>
                 
+                <div class="market-stats" id="stats-${coin.id}">
+                    <span class="stat-pill" id="mcap-${coin.id}">MCap: --</span>
+                    <span class="stat-pill" id="vol-${coin.id}">Vol: --</span>
+                </div>
+                
+                <div class="range-bar" id="range-bar-${coin.id}">
+                    <div class="range-indicator" id="range-ind-${coin.id}" style="left: 50%"></div>
+                </div>
+                <div class="range-labels">
+                    <span id="low-${coin.id}">L: --</span>
+                    <span id="high-${coin.id}">H: --</span>
+                </div>
+                
                 <div class="chart-area">
                     <canvas id="chart-${coin.id}"></canvas>
                 </div>
@@ -437,6 +450,9 @@ const EtherDash = (function () {
 
             state.websocket.onmessage = (event) => {
                 try {
+                    // Reset heartbeat on any message
+                    resetHeartbeat();
+
                     const msg = JSON.parse(event.data);
 
                     // Null safety checks
@@ -500,6 +516,14 @@ const EtherDash = (function () {
             prev: prevPrice
         };
 
+        // Store market data (from Binance 24hr ticker)
+        state.marketData[coin.id] = {
+            high: parseFloat(data.h) || 0,
+            low: parseFloat(data.l) || 0,
+            volume: parseFloat(data.v) || 0,
+            quoteVolume: parseFloat(data.q) || 0
+        };
+
         // Update price history for charts
         if (!state.priceHistory[coin.id]) {
             state.priceHistory[coin.id] = [];
@@ -527,6 +551,41 @@ const EtherDash = (function () {
         }
 
         checkPriceAlert(coin, price);
+        updateMarketDataDisplay(coin.id);
+    }
+
+    function updateMarketDataDisplay(coinId) {
+        const data = state.marketData[coinId];
+        const price = state.prices[coinId]?.price;
+        if (!data || !price) return;
+
+        // Update volume
+        const volEl = safeGetElement(`vol-${coinId}`);
+        if (volEl) {
+            const vol = data.quoteVolume;
+            volEl.textContent = `Vol: ${formatVolume(vol)}`;
+        }
+
+        // Update high/low labels
+        const highEl = safeGetElement(`high-${coinId}`);
+        const lowEl = safeGetElement(`low-${coinId}`);
+        if (highEl) highEl.textContent = `H: ${formatPrice(data.high)}`;
+        if (lowEl) lowEl.textContent = `L: ${formatPrice(data.low)}`;
+
+        // Update range indicator position
+        const rangeInd = safeGetElement(`range-ind-${coinId}`);
+        if (rangeInd && data.high > data.low) {
+            const range = data.high - data.low;
+            const position = ((price - data.low) / range) * 100;
+            rangeInd.style.left = `${Math.max(0, Math.min(100, position))}%`;
+        }
+    }
+
+    function formatVolume(vol) {
+        if (vol >= 1e9) return `$${(vol / 1e9).toFixed(1)}B`;
+        if (vol >= 1e6) return `$${(vol / 1e6).toFixed(1)}M`;
+        if (vol >= 1e3) return `$${(vol / 1e3).toFixed(1)}K`;
+        return `$${vol.toFixed(0)}`;
     }
 
     // ================================================
@@ -922,6 +981,101 @@ const EtherDash = (function () {
         if (btnAUD) btnAUD.classList.toggle('active', currency === 'AUD');
     }
 
+    // ================================================
+    // TIMEFRAME SELECTOR
+    // ================================================
+    function setTimeframe(tf) {
+        state.timeframe = tf;
+
+        // Update button states
+        document.querySelectorAll('.tf-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tf === tf);
+        });
+
+        // The change display will update in renderLoop based on timeframe
+        showToast(`Showing ${tf} change`, 'success');
+    }
+
+    // ================================================
+    // DOMINANCE CHART
+    // ================================================
+    async function fetchDominance() {
+        try {
+            const response = await fetch('https://api.coingecko.com/api/v3/global');
+            const data = await response.json();
+
+            if (data?.data?.market_cap_percentage) {
+                const btc = data.data.market_cap_percentage.btc || 0;
+                const eth = data.data.market_cap_percentage.eth || 0;
+                const other = 100 - btc - eth;
+
+                state.dominance = { btc, eth, other };
+                updateDominanceChart();
+                updateDominanceLegend();
+            }
+        } catch (e) {
+            console.error('Dominance fetch failed:', e);
+        }
+    }
+
+    function initDominanceChart() {
+        const canvas = safeGetElement('dominanceChart');
+        if (!canvas || typeof Chart === 'undefined') return;
+
+        const ctx = canvas.getContext('2d');
+        state.dominanceChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['BTC', 'ETH', 'Other'],
+                datasets: [{
+                    data: [50, 20, 30],
+                    backgroundColor: ['#f7931a', '#627eea', '#6b7280'],
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                cutout: '60%'
+            }
+        });
+    }
+
+    function updateDominanceChart() {
+        if (!state.dominanceChart) return;
+
+        state.dominanceChart.data.datasets[0].data = [
+            state.dominance.btc,
+            state.dominance.eth,
+            state.dominance.other
+        ];
+        state.dominanceChart.update('none');
+    }
+
+    function updateDominanceLegend() {
+        const legend = safeGetElement('dominanceLegend');
+        if (!legend) return;
+
+        legend.innerHTML = `
+            <div class="dominance-legend-item">
+                <span class="dot" style="background: #f7931a"></span>
+                BTC ${state.dominance.btc.toFixed(1)}%
+            </div>
+            <div class="dominance-legend-item">
+                <span class="dot" style="background: #627eea"></span>
+                ETH ${state.dominance.eth.toFixed(1)}%
+            </div>
+            <div class="dominance-legend-item">
+                <span class="dot" style="background: #6b7280"></span>
+                Other ${state.dominance.other.toFixed(1)}%
+            </div>
+        `;
+    }
+
+
     function setView(view) {
         const grid = safeGetElement('marketGrid');
         const btnGrid = safeGetElement('btnGrid');
@@ -1256,6 +1410,179 @@ const EtherDash = (function () {
     }
 
     // ================================================
+    // KEYBOARD SHORTCUTS
+    // ================================================
+    function setupKeyboardShortcuts() {
+        document.addEventListener('keydown', (e) => {
+            // Don't trigger shortcuts when typing in inputs
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            switch (e.key.toLowerCase()) {
+                case '?':
+                    toggleShortcutsModal();
+                    break;
+                case 't':
+                    toggleTheme();
+                    break;
+                case 'escape':
+                    closeAllModals();
+                    break;
+                case 'g':
+                    setView('grid');
+                    break;
+                case 'l':
+                    setView('list');
+                    break;
+                case '1':
+                    setTimeframe('1h');
+                    break;
+                case '2':
+                    setTimeframe('24h');
+                    break;
+                case '7':
+                    setTimeframe('7d');
+                    break;
+                case '3':
+                    setTimeframe('30d');
+                    break;
+            }
+        });
+    }
+
+    function toggleShortcutsModal() {
+        const modal = safeGetElement('helpModal');
+        if (modal) {
+            modal.classList.toggle('visible');
+        }
+    }
+
+    function closeAllModals() {
+        document.querySelectorAll('.modal-overlay').forEach(modal => {
+            modal.classList.remove('visible');
+        });
+    }
+
+    // ================================================
+    // WEBSOCKET HEARTBEAT
+    // ================================================
+    let heartbeatTimer = null;
+    let lastHeartbeat = Date.now();
+
+    function startHeartbeat() {
+        if (heartbeatTimer) clearInterval(heartbeatTimer);
+
+        heartbeatTimer = setInterval(() => {
+            const now = Date.now();
+            if (now - lastHeartbeat > 30000) { // 30 seconds without data
+                console.warn('WebSocket heartbeat timeout, reconnecting...');
+                showToast('Connection stale, reconnecting...', 'info');
+                if (state.websocket) {
+                    state.websocket.close();
+                }
+                connectWebSocket();
+            }
+        }, 10000); // Check every 10 seconds
+    }
+
+    function resetHeartbeat() {
+        lastHeartbeat = Date.now();
+    }
+
+    // ================================================
+    // ERROR RECOVERY UI
+    // ================================================
+    function showRetryButton(errorType, retryFn) {
+        const connInfo = safeGetElement('connectionInfo');
+        if (!connInfo) return;
+
+        connInfo.innerHTML = `
+            <span style="color: var(--accent-red)">⚠ ${errorType} failed</span>
+            <button class="retry-btn" onclick="${retryFn}">Retry</button>
+        `;
+    }
+
+    function clearRetryButton() {
+        const connInfo = safeGetElement('connectionInfo');
+        if (connInfo) {
+            connInfo.innerHTML = '';
+        }
+    }
+
+    // ================================================
+    // SPARKLINE TOOLTIPS
+    // ================================================
+    function setupSparklineTooltips(coinId) {
+        const canvas = safeGetElement(`chart-${coinId}`);
+        if (!canvas) return;
+
+        const tooltip = document.createElement('div');
+        tooltip.className = 'chart-tooltip';
+        tooltip.id = `tooltip-${coinId}`;
+        canvas.parentElement.appendChild(tooltip);
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const history = state.priceHistory[coinId];
+
+            if (!history || history.length === 0) return;
+
+            const index = Math.floor((x / rect.width) * history.length);
+            if (index >= 0 && index < history.length) {
+                const point = history[index];
+                tooltip.textContent = formatPrice(point.p);
+                tooltip.style.display = 'block';
+                tooltip.style.left = `${x}px`;
+                tooltip.style.top = `-20px`;
+            }
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            tooltip.style.display = 'none';
+        });
+    }
+
+    // ================================================
+    // CUSTOM ALERT SOUNDS
+    // ================================================
+    const ALERT_SOUNDS = {
+        'default': { freq: 880, type: 'sine' },
+        'bell': { freq: 1200, type: 'sine' },
+        'chime': { freq: 660, type: 'triangle' },
+        'beep': { freq: 1000, type: 'square' }
+    };
+
+    function playAlertSoundCustom(soundName = 'default') {
+        try {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContextClass) return;
+
+            const sound = ALERT_SOUNDS[soundName] || ALERT_SOUNDS['default'];
+            const audioContext = new AudioContextClass();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            oscillator.frequency.value = sound.freq;
+            oscillator.type = sound.type;
+            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 0.5);
+        } catch (e) {
+            console.warn('Alert sound failed:', e);
+        }
+    }
+
+    function getSelectedAlertSound() {
+        const select = safeGetElement('alertSoundSelect');
+        return select ? select.value : 'default';
+    }
+
+    // ================================================
     // INITIALIZATION
     // ================================================
     async function init() {
@@ -1265,8 +1592,13 @@ const EtherDash = (function () {
         renderGrid();
         initCharts();
         initPortfolioChart();
+        initDominanceChart();
         setupDragDrop();
         renderAlertHistory();
+        setupKeyboardShortcuts();
+
+        // Setup sparkline tooltips for each coin
+        COINS.forEach(coin => setupSparklineTooltips(coin.id));
 
         // Set up modal keyboard handlers
         const alertInput = safeGetElement('alertPriceInput');
@@ -1288,12 +1620,17 @@ const EtherDash = (function () {
         fetchFearGreed();
         fetchGas();
         fetchNews();
+        fetchDominance();
         connectWebSocket();
 
         // Set up intervals
         setInterval(fetchGas, CONFIG.GAS_UPDATE_INTERVAL);
         setInterval(fetchNews, CONFIG.NEWS_UPDATE_INTERVAL);
+        setInterval(fetchDominance, 300000); // Every 5 minutes
         setInterval(renderLoop, CONFIG.UI_REFRESH_INTERVAL);
+
+        // Start WebSocket heartbeat monitor
+        startHeartbeat();
     }
 
     // Start when DOM is ready
@@ -1321,7 +1658,10 @@ const EtherDash = (function () {
         handleImportFile,
         confirmImport,
         sortCoins,
-        clearAlertHistory
+        clearAlertHistory,
+        setTimeframe,
+        toggleShortcutsModal,
+        retryWebSocket: connectWebSocket
     };
 
 })();
