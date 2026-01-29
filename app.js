@@ -4,7 +4,7 @@
  * modular structure, and enhanced UX.
  */
 
-const EtherDash = (function() {
+const EtherDash = (function () {
     'use strict';
 
     // ================================================
@@ -57,10 +57,19 @@ const EtherDash = (function() {
         portfolioHistory: loadFromStorage('portfolioHistory', []),
         charts: {},
         portfolioChart: null,
+        dominanceChart: null,
         initialPortfolioValue: null,
         reconnectAttempts: 0,
         websocket: null,
-        currentAlertCoin: null
+        currentAlertCoin: null,
+        theme: loadFromStorage('theme', 'dark'),
+        pendingImportData: null,
+        sortBy: 'default',
+        coinOrder: loadFromStorage('coinOrder', COINS.map(c => c.id)),
+        alertHistory: loadFromStorage('alertHistory', []),
+        timeframe: '24h',
+        marketData: {},
+        dominance: { btc: 0, eth: 0, other: 0 }
     };
 
     // ================================================
@@ -88,7 +97,7 @@ const EtherDash = (function() {
         const rate = currency === 'AUD' ? state.exchangeRate : 1;
         const symbol = currency === 'AUD' ? 'A$' : '$';
         const displayPrice = price * rate;
-        
+
         return `${symbol}${displayPrice.toLocaleString(undefined, {
             minimumFractionDigits: 2,
             maximumFractionDigits: price < 1 ? 6 : 4
@@ -111,7 +120,7 @@ const EtherDash = (function() {
         toast.className = `toast ${type}`;
         toast.textContent = message;
         document.body.appendChild(toast);
-        
+
         setTimeout(() => {
             toast.classList.add('removing');
             setTimeout(() => {
@@ -128,26 +137,26 @@ const EtherDash = (function() {
     function openAlertModal(coinId) {
         const coin = COINS.find(c => c.id === coinId);
         const priceData = state.prices[coinId];
-        
+
         if (!priceData) {
             showToast('Price data not available yet', 'error');
             return;
         }
 
         state.currentAlertCoin = coinId;
-        
+
         const modal = safeGetElement('alertModal');
         const title = safeGetElement('modalTitle');
         const currentPrice = safeGetElement('modalCurrentPrice');
         const input = safeGetElement('alertPriceInput');
-        
+
         if (title) title.textContent = `Set Alert for ${coin.name}`;
         if (currentPrice) currentPrice.textContent = formatPrice(priceData.price);
         if (input) {
             input.value = state.alerts[coinId] || '';
             input.focus();
         }
-        
+
         if (modal) {
             modal.classList.add('visible');
         }
@@ -164,21 +173,21 @@ const EtherDash = (function() {
     function confirmAlert() {
         const input = safeGetElement('alertPriceInput');
         const coinId = state.currentAlertCoin;
-        
+
         if (!input || !coinId) return;
-        
+
         const targetPrice = parseFloat(input.value);
-        
+
         if (isNaN(targetPrice) || targetPrice <= 0) {
             showToast('Please enter a valid price', 'error');
             return;
         }
-        
+
         const coin = COINS.find(c => c.id === coinId);
         state.alerts[coinId] = targetPrice;
         saveToStorage('alerts', state.alerts);
         updateAlertButtons();
-        
+
         showToast(`Alert set for ${coin.name} at ${formatPrice(targetPrice)}`, 'success');
         closeAlertModal();
     }
@@ -199,7 +208,8 @@ const EtherDash = (function() {
         const grid = safeGetElement('marketGrid');
         if (!grid) return;
 
-        grid.innerHTML = COINS.map(coin => `
+        const sortedCoins = getSortedCoins();
+        grid.innerHTML = sortedCoins.map(coin => `
             <div class="crypto-card" id="card-${coin.id}">
                 <button class="alert-btn" id="btn-alert-${coin.id}" 
                         onclick="EtherDash.openAlertModal('${coin.id}')" 
@@ -240,7 +250,7 @@ const EtherDash = (function() {
                 <div class="equity-display" id="equity-${coin.id}">Eq: $0.00</div>
             </div>
         `).join('');
-        
+
         updateAlertButtons();
     }
 
@@ -276,15 +286,15 @@ const EtherDash = (function() {
         const card = safeGetElement('fngCard');
         const valueEl = safeGetElement('fngValue');
         const labelEl = safeGetElement('fngLabel');
-        
+
         try {
             const response = await fetch('https://api.alternative.me/fng/?limit=1');
             const data = await response.json();
-            
+
             if (data?.data?.[0]) {
                 const val = parseInt(data.data[0].value);
                 const classification = data.data[0].value_classification;
-                
+
                 if (valueEl) {
                     valueEl.textContent = val;
                     valueEl.style.color = val > 50 ? '#10b981' : '#ef4444';
@@ -309,14 +319,14 @@ const EtherDash = (function() {
     async function fetchGas() {
         const card = safeGetElement('gasCard');
         const valueEl = safeGetElement('gasValue');
-        
+
         try {
             // Try Etherscan API first
             let response = await fetch('https://api.etherscan.io/api?module=gastracker&action=gasoracle');
             let data = await response.json();
-            
+
             let gasGwei;
-            
+
             if (data?.status === "1" && data?.result?.ProposeGasPrice) {
                 gasGwei = parseInt(data.result.ProposeGasPrice);
             } else {
@@ -332,21 +342,21 @@ const EtherDash = (function() {
                     })
                 });
                 data = await response.json();
-                
+
                 if (data?.result) {
                     gasGwei = Math.round(parseInt(data.result, 16) / 1e9);
                 } else {
                     throw new Error('Invalid response from RPC');
                 }
             }
-            
+
             if (isNaN(gasGwei) || gasGwei <= 0) {
                 throw new Error('Invalid gas price value');
             }
-            
+
             if (valueEl) {
                 valueEl.textContent = gasGwei;
-                
+
                 // Color code by gas price
                 if (gasGwei < 30) {
                     valueEl.style.color = '#10b981';
@@ -356,7 +366,7 @@ const EtherDash = (function() {
                     valueEl.style.color = '#ef4444';
                 }
             }
-            
+
             if (card) card.classList.remove('error');
         } catch (e) {
             console.error('Gas fetch failed:', e);
@@ -371,11 +381,11 @@ const EtherDash = (function() {
     async function fetchNews() {
         const track = safeGetElement('newsTrack');
         if (!track) return;
-        
+
         try {
             const response = await fetch('https://api.rss2json.com/v1/api.json?rss_url=https://www.coindesk.com/arc/outboundfeeds/rss/');
             const data = await response.json();
-            
+
             if (data?.items?.length > 0) {
                 // Duplicate items for seamless scrolling
                 const items = data.items.slice(0, 10);
@@ -385,7 +395,7 @@ const EtherDash = (function() {
                         ${item.title}
                     </div>
                 `).join('');
-                
+
                 // Duplicate for seamless loop
                 track.innerHTML = html + html;
             }
@@ -415,10 +425,10 @@ const EtherDash = (function() {
         }
 
         const streams = COINS.map(c => `${c.binance}@ticker`).join('/');
-        
+
         try {
             state.websocket = new WebSocket(`${CONFIG.WEBSOCKET_URL}?streams=${streams}`);
-            
+
             state.websocket.onopen = () => {
                 updateConnectionStatus('connected', 'Live Feed');
                 state.reconnectAttempts = 0;
@@ -428,10 +438,10 @@ const EtherDash = (function() {
             state.websocket.onmessage = (event) => {
                 try {
                     const msg = JSON.parse(event.data);
-                    
+
                     // Null safety checks
                     if (!msg?.data?.s) return;
-                    
+
                     const coin = COINS.find(c => c.binance === msg.data.s.toLowerCase());
                     if (coin) {
                         processTick(coin, msg.data);
@@ -440,21 +450,21 @@ const EtherDash = (function() {
                     console.error('Error processing WebSocket message:', e);
                 }
             };
-            
+
             state.websocket.onerror = (error) => {
                 console.error('WebSocket error:', error);
                 updateConnectionStatus('error', 'Connection Error');
             };
-            
+
             state.websocket.onclose = () => {
                 updateConnectionStatus('connecting', 'Reconnecting...');
-                
+
                 state.reconnectAttempts++;
                 const delay = Math.min(
-                    5000 * state.reconnectAttempts, 
+                    5000 * state.reconnectAttempts,
                     CONFIG.MAX_RECONNECT_DELAY
                 );
-                
+
                 setTimeout(connectWebSocket, delay);
             };
         } catch (error) {
@@ -467,7 +477,7 @@ const EtherDash = (function() {
     function updateConnectionStatus(status, text) {
         const dot = safeGetElement('connectionDot');
         const label = safeGetElement('connectionStatus');
-        
+
         if (dot) {
             dot.className = `connection-dot ${status}`;
         }
@@ -478,10 +488,10 @@ const EtherDash = (function() {
 
     function processTick(coin, data) {
         const price = parseFloat(data.c);
-        
+
         // Guard against invalid prices
         if (isNaN(price) || price <= 0) return;
-        
+
         const prevPrice = state.prices[coin.id]?.price || price;
 
         state.prices[coin.id] = {
@@ -494,17 +504,17 @@ const EtherDash = (function() {
         if (!state.priceHistory[coin.id]) {
             state.priceHistory[coin.id] = [];
         }
-        
+
         const history = state.priceHistory[coin.id];
         const now = Date.now();
-        
+
         if (!history.length || now - history[history.length - 1].t > CONFIG.CHART_UPDATE_INTERVAL) {
             history.push({ t: now, p: price });
-            
+
             if (history.length > CONFIG.MAX_PRICE_HISTORY) {
                 history.shift();
             }
-            
+
             updateChart(coin.id, history);
         }
 
@@ -515,7 +525,7 @@ const EtherDash = (function() {
                 logWhaleMovement(coin, price, price > prevPrice, priceChangePercent);
             }
         }
-        
+
         checkPriceAlert(coin, price);
     }
 
@@ -525,11 +535,11 @@ const EtherDash = (function() {
     function logWhaleMovement(coin, price, isBuy, changePercent) {
         const list = safeGetElement('whaleList');
         if (!list) return;
-        
+
         // Remove placeholder if exists
         const placeholder = list.querySelector('.whale-placeholder');
         if (placeholder) placeholder.remove();
-        
+
         const item = document.createElement('div');
         item.className = `whale-item ${isBuy ? 'buy' : 'sell'}`;
         item.innerHTML = `
@@ -539,9 +549,9 @@ const EtherDash = (function() {
             </div>
             <div style="color:var(--text-secondary)">${changePercent.toFixed(2)}% movement detected</div>
         `;
-        
+
         list.prepend(item);
-        
+
         // Limit items
         while (list.children.length > CONFIG.MAX_WHALE_ITEMS) {
             list.lastChild.remove();
@@ -554,14 +564,14 @@ const EtherDash = (function() {
     function checkPriceAlert(coin, price) {
         const targetPrice = state.alerts[coin.id];
         if (!targetPrice) return;
-        
+
         const prevPrice = state.prices[coin.id]?.prev;
         if (!prevPrice) return;
-        
+
         // Check if price crossed the threshold
         const crossedUp = price >= targetPrice && prevPrice < targetPrice;
         const crossedDown = price <= targetPrice && prevPrice > targetPrice;
-        
+
         if (crossedUp || crossedDown) {
             triggerAlert(coin, price, targetPrice);
         }
@@ -579,13 +589,16 @@ const EtherDash = (function() {
                 console.warn('Notification failed:', e);
             }
         }
-        
+
         // Play alert sound
         playAlertSound();
-        
+
         // Show toast
         showToast(`${coin.name} hit ${formatPrice(targetPrice)}!`, 'info');
-        
+
+        // Add to alert history
+        addToAlertHistory(coin, currentPrice, targetPrice);
+
         // Remove alert after triggering
         delete state.alerts[coin.id];
         saveToStorage('alerts', state.alerts);
@@ -596,20 +609,20 @@ const EtherDash = (function() {
         try {
             const AudioContextClass = window.AudioContext || window.webkitAudioContext;
             if (!AudioContextClass) return;
-            
+
             const audioContext = new AudioContextClass();
             const oscillator = audioContext.createOscillator();
             const gainNode = audioContext.createGain();
-            
+
             oscillator.connect(gainNode);
             gainNode.connect(audioContext.destination);
-            
+
             oscillator.frequency.value = 800;
             oscillator.type = 'sine';
-            
+
             gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
             gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-            
+
             oscillator.start(audioContext.currentTime);
             oscillator.stop(audioContext.currentTime + 0.5);
         } catch (e) {
@@ -622,12 +635,12 @@ const EtherDash = (function() {
             showToast('Notifications not supported in this browser', 'error');
             return;
         }
-        
+
         if (Notification.permission === 'granted') {
             showToast('Notifications already enabled!', 'success');
             return;
         }
-        
+
         Notification.requestPermission().then(permission => {
             if (permission === 'granted') {
                 showToast('Notifications enabled successfully!', 'success');
@@ -646,13 +659,13 @@ const EtherDash = (function() {
     // ================================================
     function updateHolding(coinId, value) {
         const parsed = parseFloat(value);
-        
+
         if (!isNaN(parsed) && parsed >= 0) {
             state.holdings[coinId] = parsed;
         } else if (value === '' || value === null) {
             delete state.holdings[coinId];
         }
-        
+
         saveToStorage('holdings', state.holdings);
     }
 
@@ -664,7 +677,7 @@ const EtherDash = (function() {
             exportDate: new Date().toISOString(),
             totalValue: safeGetElement('totalPortfolioValue')?.textContent || '0'
         };
-        
+
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -674,7 +687,7 @@ const EtherDash = (function() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-        
+
         showToast('Portfolio exported successfully!', 'success');
     }
 
@@ -686,13 +699,13 @@ const EtherDash = (function() {
             console.error('Chart.js not loaded');
             return;
         }
-        
+
         Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.05)';
-        
+
         COINS.forEach(coin => {
             const canvas = safeGetElement(`chart-${coin.id}`);
             if (!canvas) return;
-            
+
             const ctx = canvas.getContext('2d');
             state.charts[coin.id] = new Chart(ctx, {
                 type: 'line',
@@ -723,19 +736,19 @@ const EtherDash = (function() {
     function updateChart(coinId, history) {
         const chart = state.charts[coinId];
         if (!chart || !history.length) return;
-        
+
         chart.data.datasets[0].data = history.map(h => h.p);
-        
+
         const isUp = history[history.length - 1].p >= history[0].p;
         chart.data.datasets[0].borderColor = isUp ? '#10b981' : '#ef4444';
-        
+
         chart.update('none');
     }
 
     function initPortfolioChart() {
         const canvas = safeGetElement('portfolioChart');
         if (!canvas || typeof Chart === 'undefined') return;
-        
+
         const ctx = canvas.getContext('2d');
         state.portfolioChart = new Chart(ctx, {
             type: 'line',
@@ -762,7 +775,7 @@ const EtherDash = (function() {
                 animation: false
             }
         });
-        
+
         // Restore historical data
         if (state.portfolioHistory.length > 0) {
             state.portfolioChart.data.labels = state.portfolioHistory.map(() => '');
@@ -784,24 +797,24 @@ const EtherDash = (function() {
         COINS.forEach(coin => {
             const priceData = state.prices[coin.id];
             if (!priceData) return;
-            
+
             const displayPrice = priceData.price * rate;
-            
+
             // Update price display
             const elPrice = safeGetElement(`price-${coin.id}`);
             if (elPrice) {
                 const formattedPrice = formatPrice(priceData.price);
-                
+
                 if (elPrice.textContent !== formattedPrice) {
                     elPrice.textContent = formattedPrice;
-                    
+
                     // Flash effect
                     if (priceData.price > priceData.prev) {
                         elPrice.classList.add('flash-up');
                     } else if (priceData.price < priceData.prev) {
                         elPrice.classList.add('flash-down');
                     }
-                    
+
                     setTimeout(() => {
                         elPrice.classList.remove('flash-up', 'flash-down');
                     }, 500);
@@ -819,7 +832,7 @@ const EtherDash = (function() {
             // Calculate holdings
             const held = state.holdings[coin.id] || 0;
             totalUSD += held * priceData.price;
-            
+
             // Update equity display
             const elEquity = safeGetElement(`equity-${coin.id}`);
             if (elEquity) {
@@ -833,29 +846,29 @@ const EtherDash = (function() {
         if (elTotal) {
             elTotal.textContent = `${symbol}${totalDisplay.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
         }
-        
+
         // Portfolio change calculation
         updatePortfolioChange(totalUSD);
-        
+
         // Update portfolio chart
         updatePortfolioHistory(totalDisplay);
     }
 
     function updatePortfolioChange(totalUSD) {
         if (state.portfolioHistory.length === 0 || totalUSD <= 0) return;
-        
+
         const firstValue = state.portfolioHistory[0].v / (state.currency === 'AUD' ? state.exchangeRate : 1);
         if (firstValue <= 0) return;
-        
+
         const changePercent = ((totalUSD - firstValue) / firstValue) * 100;
-        
+
         const elChange = safeGetElement('portfolioChange');
         if (elChange) {
             elChange.style.display = 'block';
             elChange.textContent = `${changePercent >= 0 ? '+' : ''}${changePercent.toFixed(2)}%`;
             elChange.className = `portfolio-change ${changePercent >= 0 ? 'up' : 'down'}`;
         }
-        
+
         // Update ambient glow
         const ambientLight = safeGetElement('ambientLight');
         if (ambientLight) {
@@ -871,25 +884,25 @@ const EtherDash = (function() {
 
     function updatePortfolioHistory(totalDisplay) {
         if (totalDisplay <= 0) return;
-        
+
         const now = Date.now();
         const lastEntry = state.portfolioHistory[state.portfolioHistory.length - 1];
-        
+
         if (!lastEntry || now - lastEntry.t > CONFIG.PORTFOLIO_UPDATE_INTERVAL) {
             state.portfolioHistory.push({ t: now, v: totalDisplay });
-            
+
             if (state.portfolioHistory.length > CONFIG.MAX_PORTFOLIO_HISTORY) {
                 state.portfolioHistory.shift();
             }
-            
+
             saveToStorage('portfolioHistory', state.portfolioHistory);
-            
+
             if (state.portfolioChart) {
                 state.portfolioChart.data.labels = state.portfolioHistory.map(() => '');
                 state.portfolioChart.data.datasets[0].data = state.portfolioHistory.map(h => h.v);
                 state.portfolioChart.update('none');
             }
-            
+
             if (!state.initialPortfolioValue && state.portfolioHistory.length > 0) {
                 state.initialPortfolioValue = state.portfolioHistory[0].v;
             }
@@ -901,10 +914,10 @@ const EtherDash = (function() {
     // ================================================
     function setCurrency(currency) {
         state.currency = currency;
-        
+
         const btnUSD = safeGetElement('btnUSD');
         const btnAUD = safeGetElement('btnAUD');
-        
+
         if (btnUSD) btnUSD.classList.toggle('active', currency === 'USD');
         if (btnAUD) btnAUD.classList.toggle('active', currency === 'AUD');
     }
@@ -913,7 +926,7 @@ const EtherDash = (function() {
         const grid = safeGetElement('marketGrid');
         const btnGrid = safeGetElement('btnGrid');
         const btnList = safeGetElement('btnList');
-        
+
         if (grid) {
             grid.className = `market-grid ${view === 'list' ? 'list-view' : ''}`;
         }
@@ -922,36 +935,361 @@ const EtherDash = (function() {
     }
 
     // ================================================
+    // SORTING
+    // ================================================
+    function sortCoins(sortBy) {
+        state.sortBy = sortBy;
+        renderGrid();
+    }
+
+    function getSortedCoins() {
+        let coins = [...COINS];
+
+        if (state.sortBy === 'default') {
+            // Use custom order if available
+            coins.sort((a, b) => {
+                const orderA = state.coinOrder.indexOf(a.id);
+                const orderB = state.coinOrder.indexOf(b.id);
+                return orderA - orderB;
+            });
+        } else {
+            coins.sort((a, b) => {
+                const priceA = state.prices[a.id]?.price || 0;
+                const priceB = state.prices[b.id]?.price || 0;
+                const changeA = state.prices[a.id]?.change || 0;
+                const changeB = state.prices[b.id]?.change || 0;
+                const valueA = (state.holdings[a.id] || 0) * priceA;
+                const valueB = (state.holdings[b.id] || 0) * priceB;
+
+                switch (state.sortBy) {
+                    case 'price-desc': return priceB - priceA;
+                    case 'price-asc': return priceA - priceB;
+                    case 'change-desc': return changeB - changeA;
+                    case 'change-asc': return changeA - changeB;
+                    case 'value-desc': return valueB - valueA;
+                    case 'name-asc': return a.name.localeCompare(b.name);
+                    default: return 0;
+                }
+            });
+        }
+
+        return coins;
+    }
+
+    // ================================================
+    // DRAG & DROP
+    // ================================================
+    function setupDragDrop() {
+        const cards = document.querySelectorAll('.crypto-card');
+
+        cards.forEach(card => {
+            card.setAttribute('draggable', 'true');
+
+            card.addEventListener('dragstart', (e) => {
+                card.classList.add('dragging');
+                e.dataTransfer.setData('text/plain', card.id);
+            });
+
+            card.addEventListener('dragend', () => {
+                card.classList.remove('dragging');
+                document.querySelectorAll('.crypto-card').forEach(c => c.classList.remove('drag-over'));
+            });
+
+            card.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                const dragging = document.querySelector('.dragging');
+                if (dragging && dragging !== card) {
+                    card.classList.add('drag-over');
+                }
+            });
+
+            card.addEventListener('dragleave', () => {
+                card.classList.remove('drag-over');
+            });
+
+            card.addEventListener('drop', (e) => {
+                e.preventDefault();
+                card.classList.remove('drag-over');
+
+                const draggedId = e.dataTransfer.getData('text/plain');
+                const draggedCard = document.getElementById(draggedId);
+
+                if (draggedCard && draggedCard !== card) {
+                    const grid = safeGetElement('marketGrid');
+                    const cards = Array.from(grid.children);
+                    const draggedIndex = cards.indexOf(draggedCard);
+                    const targetIndex = cards.indexOf(card);
+
+                    if (draggedIndex < targetIndex) {
+                        card.after(draggedCard);
+                    } else {
+                        card.before(draggedCard);
+                    }
+
+                    // Update order in state
+                    const newOrder = Array.from(grid.children).map(c => c.id.replace('card-', ''));
+                    state.coinOrder = newOrder;
+                    saveToStorage('coinOrder', newOrder);
+
+                    // Reset sort to default to respect custom order
+                    state.sortBy = 'default';
+                    const sortSelect = safeGetElement('sortSelect');
+                    if (sortSelect) sortSelect.value = 'default';
+
+                    showToast('Card order updated', 'success');
+                }
+            });
+        });
+    }
+
+    // ================================================
+    // ALERT HISTORY
+    // ================================================
+    function addToAlertHistory(coin, price, targetPrice) {
+        const entry = {
+            coinId: coin.id,
+            coinName: coin.name,
+            coinSymbol: coin.symbol,
+            price: price,
+            targetPrice: targetPrice,
+            timestamp: Date.now()
+        };
+
+        state.alertHistory.unshift(entry);
+
+        // Limit history to 20 items
+        if (state.alertHistory.length > 20) {
+            state.alertHistory.pop();
+        }
+
+        saveToStorage('alertHistory', state.alertHistory);
+        renderAlertHistory();
+    }
+
+    function renderAlertHistory() {
+        const list = safeGetElement('alertHistoryList');
+        if (!list) return;
+
+        if (state.alertHistory.length === 0) {
+            list.innerHTML = '<div class="empty-state">No alerts triggered yet</div>';
+            return;
+        }
+
+        list.innerHTML = state.alertHistory.map(entry => {
+            const time = new Date(entry.timestamp).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            const date = new Date(entry.timestamp).toLocaleDateString([], {
+                month: 'short',
+                day: 'numeric'
+            });
+
+            return `
+                <div class="alert-history-item">
+                    <div class="time">${date} ${time}</div>
+                    <div>${entry.coinSymbol} hit ${formatPrice(entry.targetPrice)}</div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    function clearAlertHistory() {
+        state.alertHistory = [];
+        saveToStorage('alertHistory', []);
+        renderAlertHistory();
+        showToast('Alert history cleared', 'success');
+    }
+
+    // ================================================
+    // THEME TOGGLE
+    // ================================================
+    function toggleTheme() {
+        state.theme = state.theme === 'dark' ? 'light' : 'dark';
+        applyTheme();
+        saveToStorage('theme', state.theme);
+        showToast(`Switched to ${state.theme} mode`, 'success');
+    }
+
+    function applyTheme() {
+        const root = document.documentElement;
+        const darkIcon = safeGetElement('themeIconDark');
+        const lightIcon = safeGetElement('themeIconLight');
+
+        if (state.theme === 'light') {
+            root.classList.add('light');
+            if (darkIcon) darkIcon.style.display = 'none';
+            if (lightIcon) lightIcon.style.display = 'block';
+        } else {
+            root.classList.remove('light');
+            if (darkIcon) darkIcon.style.display = 'block';
+            if (lightIcon) lightIcon.style.display = 'none';
+        }
+    }
+
+    // ================================================
+    // IMPORT PORTFOLIO
+    // ================================================
+    function openImportModal() {
+        const modal = safeGetElement('importModal');
+        if (modal) {
+            modal.classList.add('visible');
+            setupDropZone();
+        }
+    }
+
+    function closeImportModal() {
+        const modal = safeGetElement('importModal');
+        const preview = safeGetElement('importPreview');
+        const confirmBtn = safeGetElement('confirmImportBtn');
+
+        if (modal) modal.classList.remove('visible');
+        if (preview) preview.style.display = 'none';
+        if (confirmBtn) confirmBtn.disabled = true;
+
+        state.pendingImportData = null;
+    }
+
+    function setupDropZone() {
+        const dropZone = safeGetElement('fileDropZone');
+        if (!dropZone) return;
+
+        dropZone.ondragover = (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        };
+
+        dropZone.ondragleave = () => {
+            dropZone.classList.remove('drag-over');
+        };
+
+        dropZone.ondrop = (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            const file = e.dataTransfer.files[0];
+            if (file) handleImportFile(file);
+        };
+    }
+
+    function handleImportFile(file) {
+        if (!file || !file.name.endsWith('.json')) {
+            showToast('Please select a valid JSON file', 'error');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = JSON.parse(e.target.result);
+                validateAndPreviewImport(data);
+            } catch (err) {
+                showToast('Invalid JSON file', 'error');
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function validateAndPreviewImport(data) {
+        const preview = safeGetElement('importPreview');
+        const previewContent = safeGetElement('importPreviewContent');
+        const confirmBtn = safeGetElement('confirmImportBtn');
+
+        if (!data.holdings && !data.alerts && !data.portfolioHistory) {
+            showToast('No valid portfolio data found', 'error');
+            return;
+        }
+
+        state.pendingImportData = data;
+
+        // Build preview
+        let html = '<ul style="font-size: 12px; color: var(--text-secondary); list-style: none;">';
+
+        if (data.holdings && Object.keys(data.holdings).length > 0) {
+            html += `<li>✓ Holdings: ${Object.keys(data.holdings).length} coins</li>`;
+        }
+        if (data.alerts && Object.keys(data.alerts).length > 0) {
+            html += `<li>✓ Alerts: ${Object.keys(data.alerts).length} active</li>`;
+        }
+        if (data.portfolioHistory && data.portfolioHistory.length > 0) {
+            html += `<li>✓ History: ${data.portfolioHistory.length} data points</li>`;
+        }
+        if (data.exportDate) {
+            html += `<li style="margin-top: 8px; color: var(--text-muted)">Exported: ${new Date(data.exportDate).toLocaleString()}</li>`;
+        }
+
+        html += '</ul>';
+
+        if (previewContent) previewContent.innerHTML = html;
+        if (preview) preview.style.display = 'block';
+        if (confirmBtn) confirmBtn.disabled = false;
+    }
+
+    function confirmImport() {
+        if (!state.pendingImportData) return;
+
+        const data = state.pendingImportData;
+
+        // Merge holdings
+        if (data.holdings) {
+            state.holdings = { ...state.holdings, ...data.holdings };
+            saveToStorage('holdings', state.holdings);
+        }
+
+        // Merge alerts
+        if (data.alerts) {
+            state.alerts = { ...state.alerts, ...data.alerts };
+            saveToStorage('alerts', state.alerts);
+        }
+
+        // Replace portfolio history if newer
+        if (data.portfolioHistory && data.portfolioHistory.length > 0) {
+            state.portfolioHistory = data.portfolioHistory;
+            saveToStorage('portfolioHistory', state.portfolioHistory);
+        }
+
+        // Re-render UI
+        renderGrid();
+        updateAlertButtons();
+
+        showToast('Portfolio imported successfully!', 'success');
+        closeImportModal();
+    }
+
+    // ================================================
     // INITIALIZATION
     // ================================================
     async function init() {
+        // Apply saved theme
+        applyTheme();
+
         renderGrid();
         initCharts();
         initPortfolioChart();
-        
+        setupDragDrop();
+        renderAlertHistory();
+
         // Set up modal keyboard handlers
         const alertInput = safeGetElement('alertPriceInput');
         if (alertInput) {
             alertInput.addEventListener('keydown', handleModalKeydown);
         }
-        
+
         // Close modal on overlay click
-        const modalOverlay = safeGetElement('alertModal');
-        if (modalOverlay) {
-            modalOverlay.addEventListener('click', (e) => {
-                if (e.target === modalOverlay) {
-                    closeAlertModal();
+        document.querySelectorAll('.modal-overlay').forEach(modal => {
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.classList.remove('visible');
                 }
             });
-        }
-        
+        });
+
         // Fetch initial data
         await fetchExchangeRate();
         fetchFearGreed();
         fetchGas();
         fetchNews();
         connectWebSocket();
-        
+
         // Set up intervals
         setInterval(fetchGas, CONFIG.GAS_UPDATE_INTERVAL);
         setInterval(fetchNews, CONFIG.NEWS_UPDATE_INTERVAL);
@@ -976,7 +1314,14 @@ const EtherDash = (function() {
         confirmAlert,
         updateHolding,
         exportPortfolio,
-        requestNotificationPermission
+        requestNotificationPermission,
+        toggleTheme,
+        openImportModal,
+        closeImportModal,
+        handleImportFile,
+        confirmImport,
+        sortCoins,
+        clearAlertHistory
     };
 
 })();
