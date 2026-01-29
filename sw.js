@@ -1,13 +1,13 @@
-// EtherDash Service Worker - Offline Caching
+// EtherDash Service Worker - Offline Caching v5.1
 
-const CACHE_NAME = 'etherdash-v5.0';
+const CACHE_NAME = 'etherdash-v5.1';
 const STATIC_ASSETS = [
-    '/',
-    '/index.html',
-    '/styles.css',
-    '/app.js',
-    'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&family=JetBrains+Mono:wght@400;600;700&display=swap',
-    'https://cdn.jsdelivr.net/npm/chart.js'
+    './',
+    './index.html',
+    './styles.css',
+    './app.js',
+    'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap',
+    'https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'
 ];
 
 // Install: Cache static assets
@@ -38,64 +38,53 @@ self.addEventListener('activate', event => {
     self.clients.claim();
 });
 
-// Fetch: Network-first for API, cache-first for static
+// Fetch: Optimized caching strategy
 self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
 
-    // Skip WebSocket requests
-    if (url.protocol === 'wss:' || url.protocol === 'ws:') {
+    // Skip WebSocket and Chrome extension requests
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
         return;
     }
 
-    // Network-first for API requests
-    if (url.hostname.includes('coingecko.com') ||
-        url.hostname.includes('binance.com') ||
-        url.hostname.includes('etherscan.io') ||
-        url.hostname.includes('alternative.me')) {
+    // Network-first for API requests spanning multiple domains
+    const isApiRequest = [
+        'coingecko.com',
+        'binance.com',
+        'etherscan.io',
+        'alternative.me',
+        'exchangerate-api.com',
+        'rss2json.com'
+    ].some(domain => url.hostname.includes(domain));
+
+    if (isApiRequest) {
         event.respondWith(
             fetch(event.request)
+                .then(response => {
+                    // Update cache for successful API calls
+                    if (response.ok) {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                    }
+                    return response;
+                })
                 .catch(() => caches.match(event.request))
         );
         return;
     }
 
-    // Cache-first for static assets
+    // Cache-first (with revalidate) for static assets
     event.respondWith(
         caches.match(event.request)
             .then(cached => {
-                if (cached) return cached;
-
-                return fetch(event.request)
-                    .then(response => {
-                        // Cache valid responses
-                        if (response.ok && response.type === 'basic') {
-                            const clone = response.clone();
-                            caches.open(CACHE_NAME)
-                                .then(cache => cache.put(event.request, clone));
-                        }
-                        return response;
-                    });
+                const fetchPromise = fetch(event.request).then(networkResponse => {
+                    if (networkResponse.ok) {
+                        const clone = networkResponse.clone();
+                        caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                    }
+                    return networkResponse;
+                });
+                return cached || fetchPromise;
             })
-    );
-});
-
-// Background sync for offline actions (future)
-self.addEventListener('sync', event => {
-    if (event.tag === 'sync-portfolio') {
-        console.log('[SW] Syncing portfolio data');
-    }
-});
-
-// Push notifications support (future)
-self.addEventListener('push', event => {
-    const data = event.data?.json() || {};
-
-    event.waitUntil(
-        self.registration.showNotification(data.title || 'EtherDash Alert', {
-            body: data.body || 'Price alert triggered!',
-            icon: '/favicon.ico',
-            badge: '/favicon.ico',
-            vibrate: [200, 100, 200]
-        })
     );
 });

@@ -131,6 +131,13 @@ const EtherDash = (function () {
         }, 3000);
     }
 
+    function escapeHTML(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
     // ================================================
     // MODAL SYSTEM (Replaces prompt())
     // ================================================
@@ -265,6 +272,8 @@ const EtherDash = (function () {
         `).join('');
 
         updateAlertButtons();
+        initCharts();
+        COINS.forEach(coin => setupSparklineTooltips(coin.id));
     }
 
     function updateAlertButtons() {
@@ -405,7 +414,7 @@ const EtherDash = (function () {
                 const html = items.map(item => `
                     <div class="news-item">
                         <span>${new Date(item.pubDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        ${item.title}
+                        ${escapeHTML(item.title)}
                     </div>
                 `).join('');
 
@@ -765,6 +774,11 @@ const EtherDash = (function () {
             const canvas = safeGetElement(`chart-${coin.id}`);
             if (!canvas) return;
 
+            // Destroy existing chart if it exists
+            if (state.charts[coin.id]) {
+                state.charts[coin.id].destroy();
+            }
+
             const ctx = canvas.getContext('2d');
             state.charts[coin.id] = new Chart(ctx, {
                 type: 'line',
@@ -895,7 +909,10 @@ const EtherDash = (function () {
             // Update equity display
             const elEquity = safeGetElement(`equity-${coin.id}`);
             if (elEquity) {
-                elEquity.textContent = `Eq: ${symbol}${(held * displayPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+                const equityValue = `Eq: ${symbol}${(held * displayPrice).toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
+                if (elEquity.textContent !== equityValue) {
+                    elEquity.textContent = equityValue;
+                }
             }
         });
 
@@ -903,7 +920,10 @@ const EtherDash = (function () {
         const totalDisplay = totalUSD * rate;
         const elTotal = safeGetElement('totalPortfolioValue');
         if (elTotal) {
-            elTotal.textContent = `${symbol}${totalDisplay.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+            const totalText = `${symbol}${totalDisplay.toLocaleString(undefined, { minimumFractionDigits: 2 })}`;
+            if (elTotal.textContent !== totalText) {
+                elTotal.textContent = totalText;
+            }
         }
 
         // Portfolio change calculation
