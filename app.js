@@ -35,7 +35,7 @@ const EtherDash = (function () {
         MAX_RECONNECT_DELAY: 30000,
         CHART_UPDATE_INTERVAL: 1000,
         PORTFOLIO_UPDATE_INTERVAL: 10000,
-        GAS_UPDATE_INTERVAL: 15000,
+
         NEWS_UPDATE_INTERVAL: 300000,
         UI_REFRESH_INTERVAL: 1000,
         WHALE_THRESHOLD_PERCENT: 1.0,
@@ -338,67 +338,7 @@ const EtherDash = (function () {
         }
     }
 
-    async function fetchGas() {
-        const card = safeGetElement('gasCard');
-        const valueEl = safeGetElement('gasValue');
 
-        try {
-            // Try Etherscan API first
-            let response = await fetch('https://api.etherscan.io/api?module=gastracker&action=gasoracle');
-            let data = await response.json();
-
-            let gasGwei;
-
-            if (data?.status === "1" && data?.result?.ProposeGasPrice) {
-                gasGwei = parseInt(data.result.ProposeGasPrice);
-            } else {
-                // Fallback to Cloudflare RPC
-                response = await fetch('https://cloudflare-eth.com', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        jsonrpc: "2.0",
-                        method: "eth_gasPrice",
-                        params: [],
-                        id: 1
-                    })
-                });
-                data = await response.json();
-
-                if (data?.result) {
-                    gasGwei = Math.round(parseInt(data.result, 16) / 1e9);
-                } else {
-                    throw new Error('Invalid response from RPC');
-                }
-            }
-
-            if (isNaN(gasGwei) || gasGwei <= 0) {
-                throw new Error('Invalid gas price value');
-            }
-
-            if (valueEl) {
-                valueEl.textContent = gasGwei;
-
-                // Color code by gas price
-                if (gasGwei < 30) {
-                    valueEl.style.color = '#10b981';
-                } else if (gasGwei < 100) {
-                    valueEl.style.color = '#f59e0b';
-                } else {
-                    valueEl.style.color = '#ef4444';
-                }
-            }
-
-            if (card) card.classList.remove('error');
-        } catch (e) {
-            console.error('Gas fetch failed:', e);
-            if (valueEl) {
-                valueEl.textContent = '--';
-                valueEl.style.color = '#ef4444';
-            }
-            if (card) card.classList.add('error');
-        }
-    }
 
     async function fetchNews() {
         const track = safeGetElement('newsTrack');
@@ -1638,13 +1578,13 @@ const EtherDash = (function () {
         // Fetch initial data
         await fetchExchangeRate();
         fetchFearGreed();
-        fetchGas();
+
         fetchNews();
         fetchDominance();
         connectWebSocket();
 
         // Set up intervals
-        setInterval(fetchGas, CONFIG.GAS_UPDATE_INTERVAL);
+
         setInterval(fetchNews, CONFIG.NEWS_UPDATE_INTERVAL);
         setInterval(fetchDominance, 300000); // Every 5 minutes
         setInterval(renderLoop, CONFIG.UI_REFRESH_INTERVAL);
