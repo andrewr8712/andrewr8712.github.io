@@ -1,10 +1,10 @@
 /**
- * EtherDash Pro Terminal v5.0
+ * NovaTerminal Pro Terminal v5.0
  * Improved cryptocurrency dashboard with better error handling,
  * modular structure, and enhanced UX.
  */
 
-const EtherDash = (function () {
+const NovaTerminal = (function () {
     'use strict';
 
     // ================================================
@@ -43,7 +43,9 @@ const EtherDash = (function () {
         MAX_PORTFOLIO_HISTORY: 100,
         MAX_VOLATILITY_ITEMS: 20,
         VOLATILITY_THRESHOLD_PERCENT: 3.0,
-        VOLATILITY_WINDOW_MS: 300000 // 5 minutes
+        VOLATILITY_WINDOW_MS: 300000, // 5 minutes
+        SMA_PERIOD: 10,
+        RSI_PERIOD: 14
     };
 
     // ================================================
@@ -71,7 +73,9 @@ const EtherDash = (function () {
         alertHistory: loadFromStorage('alertHistory', []),
         timeframe: '24h',
         marketData: {},
-        dominance: { btc: 0, eth: 0, other: 0 }
+        dominance: { btc: 0, eth: 0, other: 0 },
+        showTA: loadFromStorage('showTA', false),
+        lastVolatilityAlert: {}
     };
 
     // ================================================
@@ -221,7 +225,7 @@ const EtherDash = (function () {
         grid.innerHTML = sortedCoins.map(coin => `
             <div class="crypto-card" id="card-${coin.id}">
                 <button class="alert-btn" id="btn-alert-${coin.id}" 
-                        onclick="EtherDash.openAlertModal('${coin.id}')" 
+                        onclick="NovaTerminal.openAlertModal('${coin.id}')" 
                         title="Set Price Alert">🔔</button>
                 
                 <div class="card-header">
@@ -245,6 +249,7 @@ const EtherDash = (function () {
                 <div class="market-stats" id="stats-${coin.id}">
                     <span class="stat-pill" id="mcap-${coin.id}">MCap: --</span>
                     <span class="stat-pill" id="vol-${coin.id}">Vol: --</span>
+                    <span class="rsi-badge" id="rsi-${coin.id}">RSI: --</span>
                 </div>
                 
                 <div class="range-bar" id="range-bar-${coin.id}">
@@ -267,7 +272,7 @@ const EtherDash = (function () {
                            placeholder="0.00" 
                            value="${state.holdings[coin.id] || ''}"
                            step="0.00000001"
-                           oninput="EtherDash.updateHolding('${coin.id}', this.value)">
+                           oninput="NovaTerminal.updateHolding('${coin.id}', this.value)">
                 </div>
                 <div class="equity-display" id="equity-${coin.id}">Eq: $0.00</div>
             </div>
@@ -523,6 +528,28 @@ const EtherDash = (function () {
             const position = ((price - data.low) / range) * 100;
             rangeInd.style.left = `${Math.max(0, Math.min(100, position))}%`;
         }
+
+        // Update RSI
+        const rsiEl = safeGetElement(`rsi-${coinId}`);
+        if (rsiEl) {
+            if (state.showTA) {
+                const rsi = calculateRSI(state.priceHistory[coinId], CONFIG.RSI_PERIOD);
+                if (rsi !== null) {
+                    rsiEl.textContent = `RSI: ${rsi.toFixed(1)}`;
+                    rsiEl.style.display = 'inline-block';
+
+                    // Color coding
+                    rsiEl.classList.remove('overbought', 'oversold');
+                    if (rsi >= 70) rsiEl.classList.add('overbought');
+                    else if (rsi <= 30) rsiEl.classList.add('oversold');
+                } else {
+                    rsiEl.textContent = 'RSI: --';
+                    rsiEl.style.display = 'inline-block';
+                }
+            } else {
+                rsiEl.style.display = 'none';
+            }
+        }
     }
 
     function formatVolume(vol) {
@@ -586,7 +613,7 @@ const EtherDash = (function () {
 
         // Play subtle alert sound if over 5%
         if (Math.abs(changePercent) > 5) {
-            playAlertSound();
+            playAlertSound(getSelectedAlertSound());
         }
 
         // Limit items
@@ -628,7 +655,7 @@ const EtherDash = (function () {
         }
 
         // Play alert sound
-        playAlertSound();
+        playAlertSound(getSelectedAlertSound());
 
         // Show toast
         showToast(`${coin.name} hit ${formatPrice(targetPrice)}!`, 'info');
@@ -642,30 +669,7 @@ const EtherDash = (function () {
         updateAlertButtons();
     }
 
-    function playAlertSound() {
-        try {
-            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContextClass) return;
 
-            const audioContext = new AudioContextClass();
-            const oscillator = audioContext.createOscillator();
-            const gainNode = audioContext.createGain();
-
-            oscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-
-            oscillator.frequency.value = 800;
-            oscillator.type = 'sine';
-
-            gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-
-            oscillator.start(audioContext.currentTime);
-            oscillator.stop(audioContext.currentTime + 0.5);
-        } catch (e) {
-            console.warn('Alert sound failed:', e);
-        }
-    }
 
     function requestNotificationPermission() {
         if (!('Notification' in window)) {
@@ -681,7 +685,7 @@ const EtherDash = (function () {
         Notification.requestPermission().then(permission => {
             if (permission === 'granted') {
                 showToast('Notifications enabled successfully!', 'success');
-                new Notification('EtherDash', {
+                new Notification('NovaTerminal', {
                     body: 'You will now receive price alerts',
                     icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y="75" font-size="75">⚡</text></svg>'
                 });
@@ -719,7 +723,7 @@ const EtherDash = (function () {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `etherdash-portfolio-${new Date().toISOString().split('T')[0]}.json`;
+        a.download = `novaterminal-portfolio-${new Date().toISOString().split('T')[0]}.json`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -749,17 +753,32 @@ const EtherDash = (function () {
             }
 
             const ctx = canvas.getContext('2d');
+            const datasets = [{
+                label: 'Price',
+                data: [],
+                borderColor: '#3b82f6',
+                tension: 0.4,
+                pointRadius: 0,
+                borderWidth: 2
+            }];
+
+            if (state.showTA) {
+                datasets.push({
+                    label: `SMA ${CONFIG.SMA_PERIOD}`,
+                    data: [],
+                    borderColor: 'rgba(245, 158, 11, 0.5)',
+                    borderDash: [5, 5],
+                    tension: 0.4,
+                    pointRadius: 0,
+                    borderWidth: 1.5
+                });
+            }
+
             state.charts[coin.id] = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: Array(CONFIG.MAX_PRICE_HISTORY).fill(''),
-                    datasets: [{
-                        data: [],
-                        borderColor: '#3b82f6',
-                        tension: 0.4,
-                        pointRadius: 0,
-                        borderWidth: 2
-                    }]
+                    datasets: datasets
                 },
                 options: {
                     responsive: true,
@@ -779,12 +798,83 @@ const EtherDash = (function () {
         const chart = state.charts[coinId];
         if (!chart || !history.length) return;
 
-        chart.data.datasets[0].data = history.map(h => h.p);
+        const prices = history.map(h => h.p);
+        chart.data.datasets[0].data = prices;
 
-        const isUp = history[history.length - 1].p >= history[0].p;
+        const isUp = prices[prices.length - 1] >= prices[0];
         chart.data.datasets[0].borderColor = isUp ? '#10b981' : '#ef4444';
 
+        if (state.showTA && chart.data.datasets[1]) {
+            chart.data.datasets[1].data = calculateSMA(prices, CONFIG.SMA_PERIOD);
+        }
+
         chart.update('none');
+    }
+
+    // ================================================
+    // TA CALCULATIONS
+    // ================================================
+    function calculateSMA(data, period) {
+        const result = [];
+        for (let i = 0; i < data.length; i++) {
+            if (i < period - 1) {
+                result.push(null);
+            } else {
+                const slice = data.slice(i - period + 1, i + 1);
+                const sum = slice.reduce((a, b) => a + b, 0);
+                result.push(sum / period);
+            }
+        }
+        return result;
+    }
+
+    function calculateRSI(history, period = 14) {
+        if (!history || history.length <= period) return null;
+        const prices = history.map(h => h.p);
+
+        let gains = 0;
+        let losses = 0;
+
+        for (let i = 1; i <= period; i++) {
+            const diff = prices[i] - prices[i - 1];
+            if (diff >= 0) gains += diff;
+            else losses -= diff;
+        }
+
+        let avgGain = gains / period;
+        let avgLoss = losses / period;
+
+        for (let i = period + 1; i < prices.length; i++) {
+            const diff = prices[i] - prices[i - 1];
+            const gain = diff >= 0 ? diff : 0;
+            const loss = diff < 0 ? -diff : 0;
+
+            avgGain = (avgGain * (period - 1) + gain) / period;
+            avgLoss = (avgLoss * (period - 1) + loss) / period;
+        }
+
+        if (avgLoss === 0) return 100;
+        const rs = avgGain / avgLoss;
+        return 100 - (100 / (1 + rs));
+    }
+
+    function toggleTA() {
+        state.showTA = !state.showTA;
+        saveToStorage('showTA', state.showTA);
+
+        // Update UI button state
+        const btn = safeGetElement('btnTA');
+        if (btn) {
+            btn.classList.toggle('active-ta', state.showTA);
+        }
+
+        // Re-init all charts to add/remove SMA dataset
+        initCharts();
+
+        // Update RSI displays
+        COINS.forEach(c => updateMarketDataDisplay(c.id));
+
+        showToast(`TA Overlays ${state.showTA ? 'Enabled' : 'Disabled'}`, 'info');
     }
 
     function initPortfolioChart() {
@@ -1344,25 +1434,38 @@ const EtherDash = (function () {
 
         state.pendingImportData = data;
 
-        // Build preview
-        let html = '<ul style="font-size: 12px; color: var(--text-secondary); list-style: none;">';
+        if (previewContent) {
+            previewContent.innerHTML = '';
+            const ul = document.createElement('ul');
+            ul.style.fontSize = '12px';
+            ul.style.color = 'var(--text-secondary)';
+            ul.style.listStyle = 'none';
 
-        if (data.holdings && Object.keys(data.holdings).length > 0) {
-            html += `<li>✓ Holdings: ${Object.keys(data.holdings).length} coins</li>`;
-        }
-        if (data.alerts && Object.keys(data.alerts).length > 0) {
-            html += `<li>✓ Alerts: ${Object.keys(data.alerts).length} active</li>`;
-        }
-        if (data.portfolioHistory && data.portfolioHistory.length > 0) {
-            html += `<li>✓ History: ${data.portfolioHistory.length} data points</li>`;
-        }
-        if (data.exportDate) {
-            html += `<li style="margin-top: 8px; color: var(--text-muted)">Exported: ${new Date(data.exportDate).toLocaleString()}</li>`;
+            if (data.holdings && Object.keys(data.holdings).length > 0) {
+                const li = document.createElement('li');
+                li.textContent = `✓ Holdings: ${Object.keys(data.holdings).length} coins`;
+                ul.appendChild(li);
+            }
+            if (data.alerts && Object.keys(data.alerts).length > 0) {
+                const li = document.createElement('li');
+                li.textContent = `✓ Alerts: ${Object.keys(data.alerts).length} active`;
+                ul.appendChild(li);
+            }
+            if (data.portfolioHistory && data.portfolioHistory.length > 0) {
+                const li = document.createElement('li');
+                li.textContent = `✓ History: ${data.portfolioHistory.length} data points`;
+                ul.appendChild(li);
+            }
+            if (data.exportDate) {
+                const li = document.createElement('li');
+                li.style.marginTop = '8px';
+                li.style.color = 'var(--text-muted)';
+                li.textContent = `Exported: ${new Date(data.exportDate).toLocaleString()}`;
+                ul.appendChild(li);
+            }
+            previewContent.appendChild(ul);
         }
 
-        html += '</ul>';
-
-        if (previewContent) previewContent.innerHTML = html;
         if (preview) preview.style.display = 'block';
         if (confirmBtn) confirmBtn.disabled = false;
     }
@@ -1422,17 +1525,35 @@ const EtherDash = (function () {
                 case 'l':
                     setView('list');
                     break;
+                case 'u':
+                    setCurrency('USD');
+                    break;
+                case 'm': // M for Money (AUD)
+                    setCurrency('AUD');
+                    break;
                 case '1':
                     setTimeframe('1h');
                     break;
                 case '2':
                     setTimeframe('24h');
                     break;
-                case '7':
+                case '3':
                     setTimeframe('7d');
                     break;
-                case '3':
+                case '4':
                     setTimeframe('30d');
+                    break;
+                case 'a':
+                    toggleTA();
+                    break;
+                case 'e':
+                    exportPortfolio();
+                    break;
+                case 'i':
+                    openImportModal();
+                    break;
+                case 'r':
+                    connectWebSocket();
                     break;
             }
         });
@@ -1477,25 +1598,7 @@ const EtherDash = (function () {
         lastHeartbeat = Date.now();
     }
 
-    // ================================================
-    // ERROR RECOVERY UI
-    // ================================================
-    function showRetryButton(errorType, retryFn) {
-        const connInfo = safeGetElement('connectionInfo');
-        if (!connInfo) return;
 
-        connInfo.innerHTML = `
-            <span style="color: var(--accent-red)">⚠ ${errorType} failed</span>
-            <button class="retry-btn" onclick="${retryFn}">Retry</button>
-        `;
-    }
-
-    function clearRetryButton() {
-        const connInfo = safeGetElement('connectionInfo');
-        if (connInfo) {
-            connInfo.innerHTML = '';
-        }
-    }
 
     // ================================================
     // SPARKLINE TOOLTIPS
@@ -1541,7 +1644,8 @@ const EtherDash = (function () {
         'beep': { freq: 1000, type: 'square' }
     };
 
-    function playAlertSoundCustom(soundName = 'default') {
+    function playAlertSound(soundName = 'default') {
+        if (soundName === 'none') return;
         try {
             const AudioContextClass = window.AudioContext || window.webkitAudioContext;
             if (!AudioContextClass) return;
@@ -1585,6 +1689,12 @@ const EtherDash = (function () {
         setupDragDrop();
         renderAlertHistory();
         setupKeyboardShortcuts();
+
+        // Update TA button state
+        const btnTA = safeGetElement('btnTA');
+        if (btnTA) {
+            btnTA.classList.toggle('active-ta', state.showTA);
+        }
 
         // Setup sparkline tooltips for each coin
         COINS.forEach(coin => setupSparklineTooltips(coin.id));
@@ -1650,6 +1760,10 @@ const EtherDash = (function () {
         clearAlertHistory,
         setTimeframe,
         toggleShortcutsModal,
+        toggleTA,
+        reconnect: connectWebSocket,
+        retryFearGreed: fetchFearGreed,
+        previewSound: playAlertSound,
         retryWebSocket: connectWebSocket
     };
 

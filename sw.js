@@ -1,6 +1,6 @@
-// EtherDash Service Worker - Offline Caching v5.1
+// NovaTerminal Service Worker - Offline Caching v5.1
 
-const CACHE_NAME = 'etherdash-v5.1';
+const CACHE_NAME = 'novaterminal-v5.2';
 const STATIC_ASSETS = [
     './',
     './index.html',

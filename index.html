@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EtherDash | Pro Terminal v5.0</title>
+    <title>NovaTerminal | Pro Terminal v5.0</title>
     <meta name="description"
         content="Real-time cryptocurrency portfolio tracker with live price updates, alerts, and market sentiment analysis.">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
@@ -25,18 +25,18 @@
             <div class="brand">
                 <div class="logo-mark">⚡</div>
                 <div class="brand-text">
-                    <h1>EtherDash</h1>
+                    <h1>NovaTerminal</h1>
                     <span>PRO TERMINAL v5.0</span>
                 </div>
             </div>
             <div class="controls">
                 <!-- Currency Toggle -->
-                <button class="btn-control active" id="btnUSD" onclick="EtherDash.setCurrency('USD')">USD</button>
-                <button class="btn-control" id="btnAUD" onclick="EtherDash.setCurrency('AUD')">AUD</button>
+                <button class="btn-control active" id="btnUSD" onclick="NovaTerminal.setCurrency('USD')">USD</button>
+                <button class="btn-control" id="btnAUD" onclick="NovaTerminal.setCurrency('AUD')">AUD</button>
                 <div class="divider"></div>
 
                 <!-- Theme Toggle -->
-                <button class="btn-control btn-icon" id="btnTheme" onclick="EtherDash.toggleTheme()"
+                <button class="btn-control btn-icon" id="btnTheme" onclick="NovaTerminal.toggleTheme()"
                     title="Toggle Theme (T)">
                     <svg id="themeIconDark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"
                         stroke-linejoin="round">
@@ -58,13 +58,13 @@
                 <div class="divider"></div>
 
                 <!-- Alert & Portfolio Controls -->
-                <button class="btn-control" onclick="EtherDash.requestNotificationPermission()">🔔 Alerts</button>
-                <button class="btn-control" onclick="EtherDash.exportPortfolio()">💾 Export</button>
-                <button class="btn-control" onclick="EtherDash.openImportModal()">📂 Import</button>
+                <button class="btn-control" onclick="NovaTerminal.requestNotificationPermission()">🔔 Alerts</button>
+                <button class="btn-control" onclick="NovaTerminal.exportPortfolio()">💾 Export</button>
+                <button class="btn-control" onclick="NovaTerminal.openImportModal()">📂 Import</button>
                 <div class="divider"></div>
 
                 <!-- View Controls -->
-                <button class="btn-control btn-icon active" id="btnGrid" onclick="EtherDash.setView('grid')"
+                <button class="btn-control btn-icon active" id="btnGrid" onclick="NovaTerminal.setView('grid')"
                     title="Grid View">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"
                         stroke-linejoin="round">
@@ -74,7 +74,7 @@
                         <rect x="3" y="14" width="7" height="7"></rect>
                     </svg>
                 </button>
-                <button class="btn-control btn-icon" id="btnList" onclick="EtherDash.setView('list')" title="List View">
+                <button class="btn-control btn-icon" id="btnList" onclick="NovaTerminal.setView('list')" title="List View">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"
                         stroke-linejoin="round">
                         <line x1="8" y1="6" x2="21" y2="6"></line>
@@ -88,7 +88,15 @@
                 <div class="divider"></div>
 
                 <!-- Help -->
-                <button class="btn-control btn-icon" onclick="EtherDash.toggleShortcutsModal()"
+                <button class="btn-control btn-icon" id="btnTA" onclick="NovaTerminal.toggleTA()"
+                    title="Toggle TA Overlays (A)">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M3 3v18h18"></path>
+                        <path d="m19 9-5 5-4-4-3 3"></path>
+                    </svg>
+                </button>
+                <button class="btn-control btn-icon" onclick="NovaTerminal.toggleShortcutsModal()"
                     title="Keyboard Shortcuts (?)">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"
                         stroke-linejoin="round">
@@ -104,7 +112,7 @@
         <div class="control-bar">
             <div class="sort-controls">
                 <span class="control-label">Sort by:</span>
-                <select id="sortSelect" onchange="EtherDash.sortCoins(this.value)">
+                <select id="sortSelect" onchange="NovaTerminal.sortCoins(this.value)">
                     <option value="default">Default</option>
                     <option value="price-desc">Price ↓</option>
                     <option value="price-asc">Price ↑</option>
@@ -118,16 +126,16 @@
             <div class="timeframe-controls">
                 <span class="control-label">Timeframe:</span>
                 <div class="timeframe-tabs">
-                    <button class="tf-btn" data-tf="1h" onclick="EtherDash.setTimeframe('1h')">1H</button>
-                    <button class="tf-btn active" data-tf="24h" onclick="EtherDash.setTimeframe('24h')">24H</button>
-                    <button class="tf-btn" data-tf="7d" onclick="EtherDash.setTimeframe('7d')">7D</button>
-                    <button class="tf-btn" data-tf="30d" onclick="EtherDash.setTimeframe('30d')">30D</button>
+                    <button class="tf-btn" data-tf="1h" onclick="NovaTerminal.setTimeframe('1h')">1H</button>
+                    <button class="tf-btn active" data-tf="24h" onclick="NovaTerminal.setTimeframe('24h')">24H</button>
+                    <button class="tf-btn" data-tf="7d" onclick="NovaTerminal.setTimeframe('7d')">7D</button>
+                    <button class="tf-btn" data-tf="30d" onclick="NovaTerminal.setTimeframe('30d')">30D</button>
                 </div>
             </div>
             <div class="connection-info">
                 <span id="connectionDot" class="connection-dot connecting"></span>
                 <span id="connectionStatus">Connecting...</span>
-                <button class="retry-btn" id="retryBtn" onclick="EtherDash.reconnect()"
+                <button class="retry-btn" id="retryBtn" onclick="NovaTerminal.reconnect()"
                     style="display:none">Retry</button>
             </div>
         </div>
@@ -144,7 +152,7 @@
                 <div class="label">Market Sentiment</div>
                 <div class="value" id="fngValue" style="color: #f59e0b">--</div>
                 <div class="sub-value" id="fngLabel">Fear & Greed Index</div>
-                <button class="retry-btn" id="fngRetry" onclick="EtherDash.retryFearGreed()"
+                <button class="retry-btn" id="fngRetry" onclick="NovaTerminal.retryFearGreed()"
                     style="display:none">Retry</button>
             </div>
 
@@ -170,7 +178,7 @@
                 <div class="alert-history-panel">
                     <div class="panel-header">
                         <span>Alert History</span>
-                        <button class="clear-btn" onclick="EtherDash.clearAlertHistory()"
+                        <button class="clear-btn" onclick="NovaTerminal.clearAlertHistory()"
                             title="Clear History">✕</button>
                     </div>
                     <div class="alert-history-list" id="alertHistoryList">
@@ -208,7 +216,7 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3 id="modalTitle">Set Price Alert</h3>
-                <button class="modal-close" onclick="EtherDash.closeAlertModal()">&times;</button>
+                <button class="modal-close" onclick="NovaTerminal.closeAlertModal()">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="current-price-display">
@@ -223,7 +231,7 @@
                 </div>
                 <div class="input-group">
                     <label for="alertSoundSelect">Alert Sound</label>
-                    <select id="alertSoundSelect" class="modal-input" onchange="EtherDash.previewSound(this.value)">
+                    <select id="alertSoundSelect" class="modal-input" onchange="NovaTerminal.previewSound(this.value)">
                         <option value="default">Default Beep</option>
                         <option value="chime">Chime</option>
                         <option value="alert">Alert</option>
@@ -233,8 +241,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="EtherDash.closeAlertModal()">Cancel</button>
-                <button class="btn-primary" onclick="EtherDash.confirmAlert()">Set Alert</button>
+                <button class="btn-secondary" onclick="NovaTerminal.closeAlertModal()">Cancel</button>
+                <button class="btn-primary" onclick="NovaTerminal.confirmAlert()">Set Alert</button>
             </div>
         </div>
     </div>
@@ -244,12 +252,12 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Import Portfolio</h3>
-                <button class="modal-close" onclick="EtherDash.closeImportModal()">&times;</button>
+                <button class="modal-close" onclick="NovaTerminal.closeImportModal()">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="file-drop-zone" id="fileDropZone">
                     <input type="file" id="importFileInput" accept=".json"
-                        onchange="EtherDash.handleImportFile(this.files[0])" style="display:none">
+                        onchange="NovaTerminal.handleImportFile(this.files[0])" style="display:none">
                     <div class="drop-icon">📄</div>
                     <p>Drop your portfolio JSON here</p>
                     <p class="sub-text">or <button class="link-btn"
@@ -261,8 +269,8 @@
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="EtherDash.closeImportModal()">Cancel</button>
-                <button class="btn-primary" id="confirmImportBtn" onclick="EtherDash.confirmImport()"
+                <button class="btn-secondary" onclick="NovaTerminal.closeImportModal()">Cancel</button>
+                <button class="btn-primary" id="confirmImportBtn" onclick="NovaTerminal.confirmImport()"
                     disabled>Import</button>
             </div>
         </div>
@@ -273,7 +281,7 @@
         <div class="modal-content modal-wide">
             <div class="modal-header">
                 <h3>Keyboard Shortcuts</h3>
-                <button class="modal-close" onclick="EtherDash.toggleShortcutsModal()">&times;</button>
+                <button class="modal-close" onclick="NovaTerminal.toggleShortcutsModal()">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="shortcuts-grid">
@@ -288,7 +296,8 @@
                         <h4>Display</h4>
                         <div class="shortcut"><kbd>T</kbd> <span>Toggle theme</span></div>
                         <div class="shortcut"><kbd>U</kbd> <span>USD currency</span></div>
-                        <div class="shortcut"><kbd>A</kbd> <span>AUD currency</span></div>
+                        <div class="shortcut"><kbd>M</kbd> <span>AUD currency</span></div>
+                        <div class="shortcut"><kbd>A</kbd> <span>TA Overlays</span></div>
                     </div>
                     <div class="shortcut-group">
                         <h4>Timeframes</h4>
