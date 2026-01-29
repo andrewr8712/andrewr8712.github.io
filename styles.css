@@ -1557,3 +1557,27 @@ body {
         margin: 10px;
     }
 }
+
+/* ================================================
+   FOOTER
+   ================================================ */
+.app-footer {
+    padding: 40px 20px 80px 20px;
+    border-top: 1px solid var(--glass-border);
+    margin-top: 40px;
+    text-align: center;
+}
+
+.ai-credits {
+    max-width: 800px;
+    margin: 0 auto;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--text-muted);
+    font-family: 'Space Grotesk', sans-serif;
+    letter-spacing: 0.2px;
+}
+
+:root.light .ai-credits {
+    color: var(--text-secondary);
+}

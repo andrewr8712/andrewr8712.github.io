@@ -13,22 +13,23 @@ const NovaTerminal = (function () {
     const COINS = [
         { id: 'bitcoin', symbol: 'BTC', name: 'Bitcoin', binance: 'btcusdt' },
         { id: 'ethereum', symbol: 'ETH', name: 'Ethereum', binance: 'ethusdt' },
-        { id: 'solana', symbol: 'SOL', name: 'Solana', binance: 'solusdt' },
+        { id: 'tether', symbol: 'USDT', name: 'Tether', binance: 'usdtusdt' },
+        { id: 'binancecoin', symbol: 'BNB', name: 'BNB', binance: 'bnbusdt' },
         { id: 'ripple', symbol: 'XRP', name: 'XRP', binance: 'xrpusdt' },
-        { id: 'cardano', symbol: 'ADA', name: 'Cardano', binance: 'adausdt' },
+        { id: 'usd-coin', symbol: 'USDC', name: 'USDC', binance: 'usdcusdt' },
+        { id: 'solana', symbol: 'SOL', name: 'Solana', binance: 'solusdt' },
+        { id: 'tron', symbol: 'TRX', name: 'TRON', binance: 'trxusdt' },
         { id: 'dogecoin', symbol: 'DOGE', name: 'Dogecoin', binance: 'dogeusdt' },
+        { id: 'cardano', symbol: 'ADA', name: 'Cardano', binance: 'adausdt' },
+        { id: 'bitcoin-cash', symbol: 'BCH', name: 'Bitcoin Cash', binance: 'bchusdt' },
+        { id: 'chainlink', symbol: 'LINK', name: 'Chainlink', binance: 'linkusdt' },
+        { id: 'avalanche-2', symbol: 'AVAX', name: 'Avalanche', binance: 'avaxusdt' },
+        { id: 'polkadot', symbol: 'DOT', name: 'Polkadot', binance: 'dotusdt' },
+        { id: 'stellar', symbol: 'XLM', name: 'Stellar', binance: 'xlmusdt' },
+        { id: 'sui', symbol: 'SUI', name: 'Sui', binance: 'suiusdt' },
+        { id: 'litecoin', symbol: 'LTC', name: 'Litecoin', binance: 'ltcusdt' },
         { id: 'pepe', symbol: 'PEPE', name: 'Pepe', binance: 'pepeusdt' }
     ];
-
-    const COIN_IMAGE_IDS = {
-        'bitcoin': 1,
-        'ethereum': 279,
-        'solana': 4128,
-        'ripple': 44,
-        'cardano': 975,
-        'dogecoin': 5,
-        'pepe': 29850
-    };
 
     const CONFIG = {
         WEBSOCKET_URL: 'wss://stream.binance.com:9443/stream',
@@ -75,7 +76,8 @@ const NovaTerminal = (function () {
         marketData: {},
         dominance: { btc: 0, eth: 0, other: 0 },
         showTA: loadFromStorage('showTA', false),
-        lastVolatilityAlert: {}
+        lastVolatilityAlert: {},
+        coinMetadata: {}
     };
 
     // ================================================
@@ -110,8 +112,8 @@ const NovaTerminal = (function () {
         })}`;
     }
 
-    function getImageId(coinId) {
-        return COIN_IMAGE_IDS[coinId] || 1;
+    function getCoinImage(coinId) {
+        return state.coinMetadata[coinId]?.image || `https://assets.coingecko.com/coins/images/1/large/${coinId}.png`;
     }
 
     function safeGetElement(id) {
@@ -230,7 +232,7 @@ const NovaTerminal = (function () {
                 
                 <div class="card-header">
                     <div class="coin-info">
-                        <img src="https://assets.coingecko.com/coins/images/${getImageId(coin.id)}/large/${coin.id}.png" 
+                        <img src="${getCoinImage(coin.id)}" 
                              class="coin-icon" 
                              onerror="this.style.display='none'"
                              alt="${coin.name}"
@@ -376,6 +378,28 @@ const NovaTerminal = (function () {
                     News feed unavailable
                 </div>
             `;
+        }
+    }
+
+    async function fetchCoinMetadata() {
+        try {
+            const ids = COINS.map(c => c.id).join(',');
+            const response = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&per_page=100&page=1&sparkline=false`);
+            const data = await response.json();
+
+            if (Array.isArray(data)) {
+                data.forEach(coin => {
+                    state.coinMetadata[coin.id] = {
+                        image: coin.image,
+                        name: coin.name,
+                        symbol: coin.symbol.toUpperCase(),
+                        marketCap: coin.market_cap
+                    };
+                });
+                renderGrid(); // Re-render with new images
+            }
+        } catch (e) {
+            console.error('Metadata fetch failed:', e);
         }
     }
 
@@ -1717,6 +1741,7 @@ const NovaTerminal = (function () {
         // Fetch initial data
         await fetchExchangeRate();
         fetchFearGreed();
+        await fetchCoinMetadata();
 
         fetchNews();
         fetchDominance();
