@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EtherDash | Ultimate Terminal</title>
+    <title>EtherDash | Stability Edition</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -31,7 +31,7 @@
             font-family: 'Inter', sans-serif;
             min-height: 100vh;
             overflow-x: hidden;
-            padding-bottom: 50px; /* Space for news ticker */
+            padding-bottom: 50px;
             transition: background 0.5s ease;
         }
 
@@ -54,7 +54,7 @@
             padding: 20px;
         }
 
-        /* --- HEADER & CONTROLS --- */
+        /* HEADER */
         .dashboard-header {
             display: flex;
             justify-content: space-between;
@@ -114,17 +114,17 @@
         .btn-control.active { background: rgba(255,255,255,0.1); color: var(--text-primary); }
         .btn-icon svg { width: 18px; height: 18px; stroke: currentColor; stroke-width: 2; }
 
-        /* --- DASHBOARD LAYOUT --- */
+        /* DASHBOARD GRID */
         .dashboard-grid {
             display: grid;
-            grid-template-columns: 3fr 1fr; /* Main Content | Sidebar */
+            grid-template-columns: 3fr 1fr;
             gap: 20px;
         }
 
-        /* --- STATS BANNER --- */
+        /* UPDATED STATS BANNER (Gas Removed) */
         .portfolio-banner {
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 2fr 1fr; /* Changed to give Portfolio more space */
             gap: 20px;
             margin-bottom: 20px;
             grid-column: 1 / -1;
@@ -150,13 +150,11 @@
 
         .label { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 6px; }
         .value { font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700; z-index: 1; position: relative; }
-        
         .sub-value { font-size: 12px; color: var(--text-secondary); margin-top: 4px; display: flex; align-items: center; gap: 6px; }
 
-        /* Sparkline canvas behind portfolio */
         #portfolioChart { position: absolute; right: 0; bottom: 0; width: 60%!important; height: 80%!important; opacity: 0.3; pointer-events: none; }
 
-        /* --- CRYPTO GRID --- */
+        /* CRYPTO GRID */
         .market-grid {
             display: grid;
             gap: 20px;
@@ -171,7 +169,6 @@
             transition: transform 0.2s;
             position: relative;
         }
-
         .crypto-card:hover { transform: translateY(-4px); border-color: rgba(255,255,255,0.2); }
 
         .card-header { display: flex; justify-content: space-between; margin-bottom: 15px; }
@@ -186,7 +183,6 @@
         .up { color: var(--accent-green); background: rgba(16, 185, 129, 0.1); }
         .down { color: var(--accent-red); background: rgba(239, 68, 68, 0.1); }
 
-        /* Alert Button */
         .alert-btn {
             background: transparent;
             border: 1px solid var(--glass-border);
@@ -200,14 +196,12 @@
             transition: all 0.2s;
             position: absolute;
             top: 20px;
-            right: 20px; /* Adjusted position */
+            right: 20px;
+            opacity: 0;
         }
-        
+        .crypto-card:hover .alert-btn, .alert-btn.active { opacity: 1; }
         .alert-btn:hover { color: white; border-color: white; }
         .alert-btn.active { color: var(--accent-orange); border-color: var(--accent-orange); box-shadow: 0 0 10px rgba(245, 158, 11, 0.2); }
-        /* Hide alert button in grid view initially, reveal on hover or if active */
-        .crypto-card .alert-btn { opacity: 0; }
-        .crypto-card:hover .alert-btn, .alert-btn.active { opacity: 1; }
 
         .chart-area { height: 70px; margin: 10px -10px; opacity: 0.8; }
 
@@ -222,9 +216,8 @@
         }
         .holdings-input { background: transparent; border: none; color: white; text-align: right; width: 80px; font-family: 'JetBrains Mono'; outline: none; }
 
-        /* --- SIDEBAR (WHALE WATCH) --- */
+        /* SIDEBAR */
         .sidebar { display: flex; flex-direction: column; gap: 20px; }
-        
         .whale-feed {
             background: var(--glass-surface);
             border: 1px solid var(--glass-border);
@@ -235,46 +228,26 @@
             display: flex;
             flex-direction: column;
         }
-
         .feed-header { font-size: 12px; font-weight: 700; color: var(--text-secondary); margin-bottom: 10px; display: flex; justify-content: space-between; text-transform: uppercase; letter-spacing: 1px; }
         .feed-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; scrollbar-width: thin; }
-        
         .whale-item {
-            font-size: 11px;
-            padding: 8px;
-            background: rgba(255,255,255,0.03);
-            border-radius: 6px;
-            border-left: 2px solid var(--glass-border);
-            font-family: 'JetBrains Mono';
-            animation: slideIn 0.3s ease-out;
+            font-size: 11px; padding: 8px; background: rgba(255,255,255,0.03); border-radius: 6px; border-left: 2px solid var(--glass-border); font-family: 'JetBrains Mono'; animation: slideIn 0.3s ease-out;
         }
         .whale-item.buy { border-left-color: var(--accent-green); }
         .whale-item.sell { border-left-color: var(--accent-red); }
-
         @keyframes slideIn { from { opacity: 0; transform: translateX(10px); } to { opacity: 1; transform: translateX(0); } }
 
-        /* --- NEWS TICKER --- */
+        /* NEWS TICKER */
         .news-ticker {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background: #000;
-            border-top: 1px solid var(--glass-border);
-            height: 40px;
-            display: flex;
-            align-items: center;
-            overflow: hidden;
-            z-index: 100;
+            position: fixed; bottom: 0; left: 0; width: 100%; background: #000; border-top: 1px solid var(--glass-border); height: 40px; display: flex; align-items: center; overflow: hidden; z-index: 100;
         }
         .ticker-label { background: var(--accent-blue); color: black; font-size: 11px; font-weight: 800; padding: 0 15px; height: 100%; display: grid; place-items: center; text-transform: uppercase; z-index: 2; }
         .ticker-track { display: flex; animation: scroll 40s linear infinite; white-space: nowrap; padding-left: 20px; }
         .news-item { margin-right: 40px; font-size: 12px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
         .news-item span { color: white; font-weight: 500; }
-        
         @keyframes scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
 
-        /* LIST VIEW OVERRIDES */
+        /* LIST VIEW */
         .market-grid.list-view { grid-template-columns: 1fr; }
         .list-view .crypto-card { display: grid; grid-template-columns: 50px 1.5fr 1fr 1fr 1fr 40px; align-items: center; gap: 15px; padding: 10px 20px; }
         .list-view .card-header { margin: 0; justify-content: flex-start; }
@@ -285,11 +258,12 @@
 
         @media (max-width: 1024px) {
             .dashboard-grid { grid-template-columns: 1fr; }
-            .portfolio-banner { grid-template-columns: 1fr 1fr; }
+            /* When stacked on tablet, keep 2 columns for banner */
+            .portfolio-banner { grid-template-columns: 1fr 1fr; } 
             .whale-feed { height: 200px; }
         }
         @media (max-width: 600px) {
-            .portfolio-banner { grid-template-columns: 1fr; }
+            .portfolio-banner { grid-template-columns: 1fr; } /* Stack on mobile */
             .list-view .crypto-card { grid-template-columns: 40px 1fr 1fr; gap: 10px; }
             .list-view .chart-area, .list-view .holdings-row, .list-view .alert-btn { display: none; }
         }
@@ -305,7 +279,7 @@
                 <div class="logo-mark">⚡</div>
                 <div>
                     <h1 style="font-size: 20px; font-weight: 700;">EtherDash</h1>
-                    <span style="font-size: 12px; color: var(--text-secondary);">PRO TERMINAL v3.0</span>
+                    <span style="font-size: 12px; color: var(--text-secondary);">PRO TERMINAL v3.1</span>
                 </div>
             </div>
             <div class="controls">
@@ -338,14 +312,6 @@
                 <div class="value" id="fngValue" style="color: #f59e0b">--</div>
                 <div class="sub-value" id="fngLabel">Fear & Greed Index</div>
             </div>
-
-            <div class="stat-card">
-                <div class="label">Ethereum Gas</div>
-                <div class="value" id="gasValue">--</div>
-                <div class="sub-value">
-                    <span style="color: var(--accent-blue)">Gwei</span> • Standard
-                </div>
-            </div>
         </div>
 
         <div class="dashboard-grid">
@@ -359,8 +325,7 @@
                         <span>Whale Watch</span>
                         <span style="color: var(--accent-blue)">Live >$500k</span>
                     </div>
-                    <div class="feed-list" id="whaleList">
-                        </div>
+                    <div class="feed-list" id="whaleList"></div>
                 </div>
             </div>
         </div>
@@ -406,17 +371,13 @@
             initCharts();
             initPortfolioChart();
             
-            // Start Data Feeds
             await fetchRate();
             fetchFearGreed();
-            fetchGas();
             fetchNews();
             connectSocket();
             
-            // Intervals
-            setInterval(fetchGas, 15000); // Update gas every 15s
-            setInterval(fetchNews, 300000); // Update news every 5m
-            setInterval(renderLoop, 1000); // UI Refresh
+            setInterval(fetchNews, 300000); 
+            setInterval(renderLoop, 1000); 
         });
 
         // --- RENDERERS ---
@@ -458,7 +419,6 @@
         }
 
         function getImageId(id) {
-            // Helper for Coindesk image IDs which aren't always logical
             const map = { 'bitcoin': 1, 'ethereum': 279, 'solana': 4128, 'ripple': 44, 'cardano': 975, 'dogecoin': 5, 'pepe': 29850 };
             return map[id] || '1';
         }
@@ -482,24 +442,8 @@
             } catch(e) {}
         }
 
-        async function fetchGas() {
-            // Use Cloudflare RPC to get gas price without API Key
-            try {
-                const r = await fetch('https://cloudflare-eth.com', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({jsonrpc:"2.0",method:"eth_gasPrice",params:[],id:1})
-                });
-                const d = await r.json();
-                const gasHex = d.result;
-                const gasGwei = parseInt(gasHex, 16) / 1000000000;
-                document.getElementById('gasValue').innerText = Math.round(gasGwei);
-            } catch(e) { console.log('Gas Error', e); }
-        }
-
         async function fetchNews() {
             try {
-                // Use RSS2JSON to bypass CORS on Coindesk RSS
                 const r = await fetch('https://api.rss2json.com/v1/api.json?rss_url=https://www.coindesk.com/arc/outboundfeeds/rss/');
                 const d = await r.json();
                 const html = d.items.map(i => `
@@ -534,11 +478,9 @@
         function processTick(coin, data) {
             const price = parseFloat(data.c);
             const prev = state.prices[coin.id]?.price || price;
-            const volumeVal = parseFloat(data.q) * price; // Approx trade volume value
 
             state.prices[coin.id] = { price, change: parseFloat(data.P), prev };
 
-            // Chart Update
             if(!state.history[coin.id]) state.history[coin.id] = [];
             const hist = state.history[coin.id];
             if(!hist.length || Date.now() - hist[hist.length-1].t > 2000) {
@@ -547,16 +489,9 @@
                 updateChart(coin.id, hist);
             }
 
-            // Whale Watcher (> $500k volume in 24h tick updates is too common, 
-            // so we simulate "Live Trades" by checking if Quote Volume jumped significantly.
-            // *Real whale watching requires trade stream (@trade), but we are on @ticker.*
-            // *We will simulate based on Price Impact for this demo.*
-            // IF price moved > 0.2% in one tick, log it.
             if(Math.abs((price - prev)/prev) > 0.002) {
                 logWhale(coin, price, (price > prev));
             }
-
-            // Alerts
             checkAlert(coin, price);
         }
 
@@ -570,13 +505,12 @@
                     <span>${coin.symbol} ${isBuy ? 'PUMP' : 'DUMP'}</span>
                     <span>$${price.toLocaleString()}</span>
                 </div>
-                <div style="color:var(--text-secondary)">High Volatility Detected</div>
+                <div style="color:var(--text-secondary)">High Volatility</div>
             `;
             list.prepend(item);
             if(list.children.length > 20) list.lastChild.remove();
         }
 
-        // Alerts System
         function setAlert(id) {
             const current = state.prices[id]?.price;
             const target = prompt(`Set price alert for ${id.toUpperCase()} (Current: $${current})`);
@@ -590,13 +524,12 @@
         function checkAlert(coin, price) {
             const target = state.alerts[coin.id];
             if(target) {
-                // Trigger if we cross the target
                 if((price >= target && state.prices[coin.id].prev < target) || 
                    (price <= target && state.prices[coin.id].prev > target)) {
                     new Notification(`🚨 ${coin.name} hit $${target}!`);
-                    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); // Free ping sound
+                    const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'); 
                     audio.play().catch(e => {});
-                    delete state.alerts[coin.id]; // Remove after firing
+                    delete state.alerts[coin.id]; 
                     localStorage.setItem('alerts', JSON.stringify(state.alerts));
                     restoreAlerts();
                 }
@@ -668,7 +601,6 @@
                 const data = state.prices[c.id];
                 if(!data) return;
                 
-                // Update Price
                 const dispPrice = data.price * rate;
                 const elPrice = document.getElementById(`price-${c.id}`);
                 const txt = `${sym}${dispPrice.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 4})}`;
@@ -678,22 +610,18 @@
                     setTimeout(() => elPrice.style.color = 'white', 500);
                 }
 
-                // Update Change
                 const elChange = document.getElementById(`change-${c.id}`);
                 elChange.innerText = `${data.change > 0 ? '+' : ''}${data.change.toFixed(2)}%`;
                 elChange.className = `price-change ${data.change >= 0 ? 'up' : 'down'}`;
 
-                // Update Equity
                 const held = state.holdings[c.id] || 0;
                 total += held * data.price;
                 document.getElementById(`equity-${c.id}`).innerText = `Eq: ${sym}${(held * dispPrice).toLocaleString(undefined, {maximumFractionDigits:0})}`;
             });
 
-            // Update Total
             const totalDisp = total * rate;
             document.getElementById('totalPortfolioValue').innerText = `${sym}${totalDisp.toLocaleString(undefined, {minimumFractionDigits:2})}`;
             
-            // Update Portfolio Chart History
             const now = Date.now();
             if(total > 0 && (!state.portfolioHistory.length || now - state.portfolioHistory[state.portfolioHistory.length-1].t > 10000)) {
                 state.portfolioHistory.push({ t: now, v: totalDisp });
@@ -706,7 +634,6 @@
             }
         }
 
-        // Global View Switcher
         window.setCurrency = (c) => { state.currency = c; document.getElementById('btnUSD').classList.toggle('active', c==='USD'); document.getElementById('btnAUD').classList.toggle('active', c==='AUD'); };
         window.setView = (v) => { document.getElementById('marketGrid').className = `market-grid ${v==='list'?'list-view':''}`; };
 
