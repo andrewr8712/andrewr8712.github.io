@@ -891,8 +891,8 @@ body {
     padding: 20px;
 }
 
-/* Whale Feed */
-.whale-feed {
+/* Volatility Feed */
+.volatility-feed {
     background: var(--glass-surface);
     border: 1px solid var(--glass-border);
     border-radius: var(--border-radius-lg);
@@ -941,7 +941,7 @@ body {
     border-radius: 3px;
 }
 
-.whale-item {
+.volatility-item {
     font-size: 11px;
     padding: 8px;
     background: rgba(255, 255, 255, 0.03);
@@ -951,19 +951,19 @@ body {
     animation: slideIn 0.3s ease-out;
 }
 
-:root.light .whale-item {
+:root.light .volatility-item {
     background: rgba(0, 0, 0, 0.03);
 }
 
-.whale-item.buy {
+.volatility-item.buy {
     border-left-color: var(--accent-green);
 }
 
-.whale-item.sell {
+.volatility-item.sell {
     border-left-color: var(--accent-red);
 }
 
-.whale-placeholder {
+.volatility-placeholder {
     color: var(--text-muted);
     font-size: 11px;
     text-align: center;

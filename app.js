@@ -41,7 +41,9 @@ const EtherDash = (function () {
         WHALE_THRESHOLD_PERCENT: 1.0,
         MAX_PRICE_HISTORY: 50,
         MAX_PORTFOLIO_HISTORY: 100,
-        MAX_WHALE_ITEMS: 20
+        MAX_VOLATILITY_ITEMS: 20,
+        VOLATILITY_THRESHOLD_PERCENT: 3.0,
+        VOLATILITY_WINDOW_MS: 300000 // 5 minutes
     };
 
     // ================================================
@@ -491,15 +493,8 @@ const EtherDash = (function () {
             updateChart(coin.id, history);
         }
 
-        // Whale detection
-        if (prevPrice > 0) {
-            const priceChangePercent = Math.abs((price - prevPrice) / prevPrice) * 100;
-            if (priceChangePercent > CONFIG.WHALE_THRESHOLD_PERCENT) {
-                logWhaleMovement(coin, price, price > prevPrice, priceChangePercent);
-            }
-        }
-
         checkPriceAlert(coin, price);
+        checkVolatility(coin, price);
         updateMarketDataDisplay(coin.id);
     }
 
@@ -538,30 +533,64 @@ const EtherDash = (function () {
     }
 
     // ================================================
-    // WHALE DETECTION
+    // VOLATILITY DETECTION
     // ================================================
-    function logWhaleMovement(coin, price, isBuy, changePercent) {
-        const list = safeGetElement('whaleList');
+    function checkVolatility(coin, currentPrice) {
+        const history = state.priceHistory[coin.id];
+        if (!history || history.length < 2) return;
+
+        const now = Date.now();
+        const windowStart = now - CONFIG.VOLATILITY_WINDOW_MS;
+
+        // Find the oldest price within the window
+        const basePoint = history.find(p => p.t >= windowStart);
+        if (!basePoint) return;
+
+        const basePrice = basePoint.p;
+        const changePercent = ((currentPrice - basePrice) / basePrice) * 100;
+
+        if (Math.abs(changePercent) >= CONFIG.VOLATILITY_THRESHOLD_PERCENT) {
+            // Check if we already alerted for this burst recently
+            const lastAlert = state.lastVolatilityAlert?.[coin.id];
+            if (!lastAlert || now - lastAlert > 60000) { // Max one alert per minute per coin
+                logVolatility(coin, currentPrice, changePercent);
+                if (!state.lastVolatilityAlert) state.lastVolatilityAlert = {};
+                state.lastVolatilityAlert[coin.id] = now;
+            }
+        }
+    }
+
+    function logVolatility(coin, price, changePercent) {
+        const list = safeGetElement('volatilityList');
         if (!list) return;
 
         // Remove placeholder if exists
-        const placeholder = list.querySelector('.whale-placeholder');
+        const placeholder = list.querySelector('.volatility-placeholder');
         if (placeholder) placeholder.remove();
 
         const item = document.createElement('div');
-        item.className = `whale-item ${isBuy ? 'buy' : 'sell'}`;
+        const isPump = changePercent > 0;
+        item.className = `volatility-item ${isPump ? 'buy' : 'sell'}`;
         item.innerHTML = `
             <div style="display:flex; justify-content:space-between">
-                <span>${coin.symbol} ${isBuy ? '↑ PUMP' : '↓ DUMP'}</span>
+                <span>${coin.symbol} ${isPump ? '🚀 SPIKE' : '📉 CRASH'}</span>
                 <span>${formatPrice(price)}</span>
             </div>
-            <div style="color:var(--text-secondary)">${changePercent.toFixed(2)}% movement detected</div>
+            <div style="color:var(--text-secondary)">${Math.abs(changePercent).toFixed(2)}% move in 5m</div>
         `;
 
         list.prepend(item);
 
+        // Toast for major volatility
+        showToast(`${coin.symbol} is moving fast: ${changePercent.toFixed(2)}%!`, 'info');
+
+        // Play subtle alert sound if over 5%
+        if (Math.abs(changePercent) > 5) {
+            playAlertSound();
+        }
+
         // Limit items
-        while (list.children.length > CONFIG.MAX_WHALE_ITEMS) {
+        while (list.children.length > CONFIG.MAX_VOLATILITY_ITEMS) {
             list.lastChild.remove();
         }
     }
