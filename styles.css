@@ -312,12 +312,16 @@ body {
     height: 40px;
     background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
     border-radius: 10px;
-    display: grid;
-    place-items: center;
-    font-weight: 800;
-    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
     color: white;
+}
+
+.logo-mark svg {
+    width: 24px;
+    height: 24px;
 }
 
 .brand-text h1 {
@@ -589,10 +593,12 @@ body {
     top: 8px;
     left: 8px;
     color: var(--text-muted);
-    font-size: 14px;
     cursor: grab;
     opacity: 0;
     transition: opacity var(--transition-fast);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .crypto-card:hover .drag-handle {
@@ -767,20 +773,20 @@ body {
 
 /* Alert Button */
 .alert-btn {
-    background: transparent;
+    background: rgba(255, 255, 255, 0.05);
     border: 1px solid var(--glass-border);
     color: var(--text-secondary);
-    border-radius: 50%;
-    width: 32px;
-    height: 32px;
-    display: grid;
-    place-items: center;
+    border-radius: 8px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
     transition: all var(--transition-fast);
     position: absolute;
-    top: 20px;
-    right: 20px;
-    font-size: 14px;
+    top: 10px;
+    right: 10px;
     opacity: 0;
 }
 
@@ -1439,54 +1445,89 @@ body {
    ================================================ */
 .market-grid.list-view {
     grid-template-columns: 1fr;
+    gap: 10px;
 }
 
 .list-view .crypto-card {
     display: grid;
-    grid-template-columns: 30px 50px 1.5fr 1fr 1fr 1fr 40px;
+    /* Columns: Drag | Alert | Coin Info | Price | Chart | Holdings */
+    grid-template-columns: 30px 44px 2fr 1.5fr 2fr 1.5fr;
     align-items: center;
-    gap: 15px;
-    padding: 10px 20px;
+    gap: 20px;
+    padding: 12px 24px;
     cursor: default;
 }
 
 .list-view .drag-handle {
+    grid-column: 1;
     position: static;
     opacity: 1;
+    color: var(--text-muted);
+    font-size: 18px;
+    cursor: grab;
+}
+
+.list-view .alert-btn {
+    grid-column: 2;
+    position: static;
+    opacity: 1;
+    margin: 0;
 }
 
 .list-view .card-header {
-    margin: 0;
-    justify-content: flex-start;
+    display: contents;
+    /* Flattens the header so children join the main grid */
+}
+
+.list-view .coin-info {
+    grid-column: 3;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.list-view .price-box {
+    grid-column: 4;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.list-view .current-price {
+    font-size: 16px;
+}
+
+.list-view .price-change {
+    margin-top: 2px;
+    font-size: 11px;
 }
 
 .list-view .chart-area {
-    height: 40px;
+    grid-column: 5;
+    height: 36px;
     margin: 0;
-}
-
-.list-view .market-stats,
-.list-view .range-bar,
-.list-view .range-labels {
-    display: none;
+    width: 100%;
 }
 
 .list-view .holdings-row {
+    grid-column: 6;
     margin: 0;
     padding: 0;
     background: none;
     justify-content: flex-end;
+    gap: 10px;
 }
 
-.list-view .alert-btn {
-    position: static;
-    opacity: 1;
+.list-view .holdings-input {
+    width: 100px;
+    border-bottom: 1px solid var(--glass-border);
 }
 
-.list-view .coin-symbol {
-    display: none;
-}
-
+.list-view .market-stats,
+.list-view .range-bar,
+.list-view .range-labels,
+.list-view .coin-symbol,
 .list-view .equity-display {
     display: none;
 }

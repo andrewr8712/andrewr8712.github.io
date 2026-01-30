@@ -77,7 +77,8 @@ const NovaTerminal = (function () {
         dominance: { btc: 0, eth: 0, other: 0 },
         showTA: loadFromStorage('showTA', false),
         lastVolatilityAlert: {},
-        coinMetadata: {}
+        coinMetadata: {},
+        performanceBaselines: {}
     };
 
     // ================================================
@@ -226,9 +227,24 @@ const NovaTerminal = (function () {
         const sortedCoins = getSortedCoins();
         grid.innerHTML = sortedCoins.map(coin => `
             <div class="crypto-card" id="card-${coin.id}">
+                <div class="drag-handle">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px; height:16px;">
+                        <circle cx="9" cy="12" r="1"></circle>
+                        <circle cx="9" cy="5" r="1"></circle>
+                        <circle cx="9" cy="19" r="1"></circle>
+                        <circle cx="15" cy="12" r="1"></circle>
+                        <circle cx="15" cy="5" r="1"></circle>
+                        <circle cx="15" cy="19" r="1"></circle>
+                    </svg>
+                </div>
                 <button class="alert-btn" id="btn-alert-${coin.id}" 
                         onclick="NovaTerminal.openAlertModal('${coin.id}')" 
-                        title="Set Price Alert">🔔</button>
+                        title="Set Price Alert">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px; height:14px;">
+                        <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                        <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                </button>
                 
                 <div class="card-header">
                     <div class="coin-info">
@@ -244,12 +260,12 @@ const NovaTerminal = (function () {
                     </div>
                     <div class="price-box">
                         <div class="current-price" id="price-${coin.id}">---</div>
-                        <div class="price-change" id="change-${coin.id}">--%</div>
+                        <div class="price-change" id="change-${coin.id}">--% (${state.timeframe.toUpperCase()})</div>
                     </div>
                 </div>
                 
                 <div class="market-stats" id="stats-${coin.id}">
-                    <span class="stat-pill" id="mcap-${coin.id}">MCap: --</span>
+                    <span class="stat-pill" id="mcap-${coin.id}">MCap: ${getFormattedMarketCap(coin.id)}</span>
                     <span class="stat-pill" id="vol-${coin.id}">Vol: --</span>
                     <span class="rsi-badge" id="rsi-${coin.id}">RSI: --</span>
                 </div>
@@ -384,7 +400,7 @@ const NovaTerminal = (function () {
     async function fetchCoinMetadata() {
         try {
             const ids = COINS.map(c => c.id).join(',');
-            const response = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&per_page=100&page=1&sparkline=false`);
+            const response = await fetch(`https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&per_page=100&page=1&sparkline=false&price_change_percentage=1h,24h,7d,30d`);
             const data = await response.json();
 
             if (Array.isArray(data)) {
@@ -394,6 +410,15 @@ const NovaTerminal = (function () {
                         name: coin.name,
                         symbol: coin.symbol.toUpperCase(),
                         marketCap: coin.market_cap
+                    };
+
+                    // Calculate baseline prices for each timeframe
+                    const currentPrice = coin.current_price;
+                    state.performanceBaselines[coin.id] = {
+                        '1h': currentPrice / (1 + (coin.price_change_percentage_1h_in_currency || 0) / 100),
+                        '24h': currentPrice / (1 + (coin.price_change_percentage_24h_in_currency || 0) / 100),
+                        '7d': currentPrice / (1 + (coin.price_change_percentage_7d_in_currency || 0) / 100),
+                        '30d': currentPrice / (1 + (coin.price_change_percentage_30d_in_currency || 0) / 100)
                     };
                 });
                 renderGrid(); // Re-render with new images
@@ -575,6 +600,34 @@ const NovaTerminal = (function () {
             }
         }
     }
+
+    function getFormattedMarketCap(coinId) {
+        const metadata = state.coinMetadata[coinId];
+        if (!metadata || !metadata.marketCap) return '--';
+
+        const isAUD = state.currency === 'AUD';
+        const rate = isAUD ? state.exchangeRate : 1;
+        const symbol = isAUD ? 'A$' : '$';
+
+        return `${symbol}${formatMarketCap(metadata.marketCap * rate)}`;
+    }
+
+    function formatMarketCap(mcap) {
+        if (mcap >= 1e12) return `${(mcap / 1e12).toFixed(2)}T`;
+        if (mcap >= 1e9) return `${(mcap / 1e9).toFixed(2)}B`;
+        if (mcap >= 1e6) return `${(mcap / 1e6).toFixed(1)}M`;
+        return mcap.toLocaleString(undefined, { maximumFractionDigits: 0 });
+    }
+
+    function updateMCapDisplays() {
+        COINS.forEach(coin => {
+            const el = safeGetElement(`mcap-${coin.id}`);
+            if (el) {
+                el.textContent = `MCap: ${getFormattedMarketCap(coin.id)}`;
+            }
+        });
+    }
+
 
     function formatVolume(vol) {
         if (vol >= 1e9) return `$${(vol / 1e9).toFixed(1)}B`;
@@ -980,8 +1033,15 @@ const NovaTerminal = (function () {
             // Update change display
             const elChange = safeGetElement(`change-${coin.id}`);
             if (elChange) {
-                const change = priceData.change;
-                elChange.textContent = `${change > 0 ? '+' : ''}${change.toFixed(2)}%`;
+                let change = priceData.change; // Fallback to Binance 24h
+
+                // If we have baseline data for the current timeframe, calculate real-time change
+                const baseline = state.performanceBaselines[coin.id]?.[state.timeframe];
+                if (baseline && baseline > 0) {
+                    change = ((priceData.price - baseline) / baseline) * 100;
+                }
+
+                elChange.textContent = `${change > 0 ? '+' : ''}${change.toFixed(2)}% (${state.timeframe.toUpperCase()})`;
                 elChange.className = `price-change ${change >= 0 ? 'up' : 'down'}`;
             }
 
@@ -1082,6 +1142,9 @@ const NovaTerminal = (function () {
 
         if (btnUSD) btnUSD.classList.toggle('active', currency === 'USD');
         if (btnAUD) btnAUD.classList.toggle('active', currency === 'AUD');
+
+        // Refresh MCap displays for new currency
+        updateMCapDisplays();
     }
 
     // ================================================
@@ -1095,8 +1158,9 @@ const NovaTerminal = (function () {
             btn.classList.toggle('active', btn.dataset.tf === tf);
         });
 
-        // The change display will update in renderLoop based on timeframe
-        showToast(`Showing ${tf} change`, 'success');
+        // Update UI immediately (labels, etc)
+        renderGrid();
+        showToast(`Timeframe set to ${tf}`, 'success');
     }
 
     // ================================================
