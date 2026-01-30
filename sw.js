@@ -51,7 +51,6 @@ self.addEventListener('fetch', event => {
     const isApiRequest = [
         'coingecko.com',
         'binance.com',
-        'etherscan.io',
         'alternative.me',
         'exchangerate-api.com',
         'rss2json.com'
